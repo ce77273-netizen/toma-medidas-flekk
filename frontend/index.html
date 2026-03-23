@@ -26,8 +26,7 @@
         <!-- Visor de cámara para escanear -->
         <div id="cameraContainer" class="camera-container" style="display:none;">
             <div class="camera-card">
-                <video id="video" autoplay playsinline></video>
-                <canvas id="canvas" style="display:none;"></canvas>
+                <div id="reader" style="width: 100%;"></div>
                 <div class="camera-controls">
                     <button id="closeCameraBtn">❌ Cancelar</button>
                 </div>
@@ -66,7 +65,7 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/@zxing/library@0.18.6/umd/index.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
