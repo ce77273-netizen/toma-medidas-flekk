@@ -2,7 +2,8 @@ const API_URL = window.location.origin + '/api';
 let currentSku = null;
 let currentArticulo = null;
 let selectedPack = null;
-let scanner = null;
+let html5QrCode = null;
+let scannerActive = false;
 let barcodeBuffer = '';
 let barcodeTimer = null;
 let isHardwareScanner = false;
@@ -13,7 +14,6 @@ const scanBtn = document.getElementById('scanBtn');
 const scanCameraBtn = document.getElementById('scanCameraBtn');
 const cameraContainer = document.getElementById('cameraContainer');
 const closeCameraBtn = document.getElementById('closeCameraBtn');
-const video = document.getElementById('scanner-video');
 const formContainer = document.getElementById('formContainer');
 const displaySku = document.getElementById('displaySku');
 const displayArticulo = document.getElementById('displayArticulo');
@@ -152,101 +152,108 @@ closeCameraBtn.onclick = () => {
     detenerCamara();
 };
 
-// Iniciar cámara
+// Iniciar cámara con html5-qrcode
 async function iniciarCamara() {
-    // Verificar si la librería está cargada
-    if (typeof Instascan === 'undefined') {
-        showStatus('Cargando escáner... Espera un momento y vuelve a intentar.', 'error');
-        console.error('Instascan no cargado');
-        
-        // Intentar recargar la librería
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/instascan@1.0.0/instascan.min.js';
-        script.onload = () => {
-            showStatus('Escáner cargado. Vuelve a intentar.', 'success');
-        };
-        document.head.appendChild(script);
-        return;
-    }
-    
     try {
         cameraContainer.style.display = 'block';
+        scannerActive = true;
         
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            showStatus('Tu navegador no soporta cámara. Usa ingreso manual.', 'error');
-            detenerCamara();
-            return;
-        }
+        html5QrCode = new Html5Qrcode("reader");
         
-        scanner = new Instascan.Scanner({ 
-            video: video,
-            mirror: false,
-            backgroundScan: false,
-            continuous: true
-        });
+        const config = {
+            fps: 20,
+            qrbox: { width: 280, height: 120 },
+            aspectRatio: 1.0,
+            formatsToSupport: [ 
+                Html5QrcodeSupportedFormats.EAN_13,
+                Html5QrcodeSupportedFormats.EAN_8,
+                Html5QrcodeSupportedFormats.UPC_A,
+                Html5QrcodeSupportedFormats.UPC_E,
+                Html5QrcodeSupportedFormats.CODE_39,
+                Html5QrcodeSupportedFormats.CODE_93,
+                Html5QrcodeSupportedFormats.CODE_128,
+                Html5QrcodeSupportedFormats.CODABAR,
+                Html5QrcodeSupportedFormats.ITF
+            ]
+        };
         
-        scanner.addListener('scan', function(content) {
-            const code = content.trim();
-            if (validarCodigoBarras(code)) {
-                playBeep();
-                vibrate();
-                detenerCamara();
-                skuInput.value = code;
-                verificarSku(code);
-            } else {
-                showStatus('⚠️ Código no válido', 'error');
-                setTimeout(() => {
-                    if (statusDiv.innerHTML === '⚠️ Código no válido') {
-                        statusDiv.innerHTML = '';
-                    }
-                }, 1500);
+        const cameraId = await getBackCamera();
+        
+        await html5QrCode.start(
+            cameraId,
+            config,
+            (decodedText) => {
+                if (!scannerActive) return;
+                const code = decodedText.trim();
+                if (validarCodigoBarras(code)) {
+                    scannerActive = false;
+                    playBeep();
+                    vibrate();
+                    detenerCamara();
+                    skuInput.value = code;
+                    verificarSku(code);
+                } else {
+                    showStatus('⚠️ Código no válido', 'error');
+                    setTimeout(() => {
+                        if (statusDiv.innerHTML === '⚠️ Código no válido') {
+                            statusDiv.innerHTML = '';
+                        }
+                    }, 1500);
+                }
+            },
+            (errorMessage) => {
+                console.log(errorMessage);
             }
-        });
-        
-        const cameras = await Instascan.Camera.getCameras();
-        
-        if (cameras.length === 0) {
-            showStatus('No se encontró cámara. Usa ingreso manual.', 'error');
-            detenerCamara();
-            return;
-        }
-        
-        let backCamera = cameras.find(camera => 
-            camera.name.toLowerCase().includes('back') ||
-            camera.name.toLowerCase().includes('environment') ||
-            camera.name.toLowerCase().includes('rear')
         );
         
-        if (!backCamera) {
-            backCamera = cameras[0];
-        }
-        
-        await scanner.start(backCamera);
         showStatus('📷 Cámara activa. Apunta al código de barras.', 'success');
         
     } catch (error) {
         console.error('Error:', error);
         
-        if (error.name === 'NotAllowedError') {
-            showStatus('🔒 Permiso de cámara denegado. Habilita la cámara en la configuración.', 'error');
-        } else if (error.name === 'NotFoundError') {
-            showStatus('📷 No se encontró cámara en este dispositivo.', 'error');
+        if (error === 'NoCamerasFound') {
+            showStatus('No se encontró cámara en este dispositivo.', 'error');
+        } else if (error === 'NotAllowedError') {
+            showStatus('🔒 Permiso de cámara denegado. Habilita la cámara.', 'error');
         } else {
-            showStatus('Error al acceder a la cámara: ' + error.message, 'error');
+            showStatus('Error al acceder a la cámara: ' + error, 'error');
         }
-        
         detenerCamara();
     }
 }
 
-function detenerCamara() {
-    if (scanner) {
-        try {
-            scanner.stop();
-        } catch(e) {}
-        scanner = null;
+async function getBackCamera() {
+    try {
+        const devices = await Html5Qrcode.getCameras();
+        if (!devices || devices.length === 0) {
+            throw 'NoCamerasFound';
+        }
+        let backCamera = devices.find(device => 
+            device.label.toLowerCase().includes('back') ||
+            device.label.toLowerCase().includes('environment') ||
+            device.label.toLowerCase().includes('rear') ||
+            device.label.toLowerCase().includes('trasera')
+        );
+        if (!backCamera) backCamera = devices[0];
+        return backCamera.id;
+    } catch (error) {
+        throw error;
     }
-    cameraContainer.style.display = 'none';
+}
+
+function detenerCamara() {
+    scannerActive = false;
+    if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+            html5QrCode.clear();
+            cameraContainer.style.display = 'none';
+        }).catch(() => {
+            cameraContainer.style.display = 'none';
+        });
+    } else {
+        cameraContainer.style.display = 'none';
+    }
+    html5QrCode = null;
 }
 
 async function verificarSku(sku) {
