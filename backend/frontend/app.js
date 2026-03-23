@@ -2,9 +2,8 @@ const API_URL = window.location.origin + '/api';
 let currentSku = null;
 let currentArticulo = null;
 let selectedPack = null;
+let html5QrCode = null;
 let scannerActive = false;
-let lastAcceptedCode = '';
-let lastAcceptedTime = 0;
 
 // Elementos DOM
 const skuInput = document.getElementById('skuInput');
@@ -19,13 +18,30 @@ const saveBtn = document.getElementById('saveBtn');
 const cancelBtn = document.getElementById('cancelBtn');
 const statusDiv = document.getElementById('status');
 
-// Función para validar código de barras (rechaza QR)
+// Crear sonido de escaneo
+const scanSound = new Audio();
+scanSound.src = 'https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3';
+scanSound.volume = 0.7;
+
+// Función para reproducir sonido
+function playBeep() {
+    try {
+        scanSound.currentTime = 0;
+        scanSound.play().catch(e => console.log('Error al reproducir sonido:', e));
+    } catch(e) {}
+}
+
+// Función para vibrar (si está disponible)
+function vibrate() {
+    if (navigator.vibrate) {
+        navigator.vibrate(200);
+    }
+}
+
+// Función para validar código de barras
 function validarCodigoBarras(code) {
     code = code.trim();
     if (!code) return false;
-    
-    // Rechazar códigos muy largos (los QR suelen ser largos)
-    if (code.length > 25) return false;
     
     // Formato: solo letras mayúsculas, números y guiones
     const formatoValido = /^[A-Z0-9\-]+$/.test(code);
@@ -34,15 +50,11 @@ function validarCodigoBarras(code) {
     // Longitud entre 4 y 20 caracteres
     if (code.length < 4 || code.length > 20) return false;
     
-    // Lista negra de códigos erróneos
-    const codigosErrores = [
-        '000000', '111111', '123456', '999999', '0000000000',
-        '1111111111', '1234567890', '9999999999', '0000', '1111',
-        '1234', '9999', '00000000', '11111111', '12345678'
-    ];
+    // Lista negra
+    const codigosErrores = ['000000', '111111', '123456', '999999'];
     if (codigosErrores.includes(code)) return false;
     
-    // Debe tener al menos una letra (los códigos de barras válidos tienen letras)
+    // Debe tener al menos una letra
     const tieneLetra = /[A-Z]/.test(code);
     if (!tieneLetra) return false;
     
@@ -67,7 +79,7 @@ scanBtn.onclick = async () => {
     await verificarSku(sku);
 };
 
-// Abrir cámara
+// Abrir cámara con html5-qrcode
 scanCameraBtn.onclick = async () => {
     await iniciarCamara();
 };
@@ -77,133 +89,123 @@ closeCameraBtn.onclick = () => {
     detenerCamara();
 };
 
-// Iniciar cámara con Quagga - Solo códigos de barras lineales
+// Iniciar cámara con html5-qrcode (más confiable)
 async function iniciarCamara() {
     try {
         cameraContainer.style.display = 'block';
         scannerActive = true;
         
-        Quagga.init({
-            inputStream: {
-                name: "Live",
-                type: "LiveStream",
-                target: document.querySelector('#scanner-container'),
-                constraints: {
-                    facingMode: "environment",
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                },
-            },
-            locator: {
-                patchSize: "x-large",
-                halfSample: false,
-                debug: {
-                    drawBoundingBox: false,
-                    showFrequency: false,
-                    drawScanline: false,
-                    showPattern: false
-                }
-            },
-            numOfWorkers: navigator.hardwareConcurrency || 4,
-            decoder: {
-                readers: [
-                    "code_128_reader",
-                    "ean_reader",
-                    "ean_8_reader",
-                    "code_39_reader",
-                    "code_93_reader",
-                    "codabar_reader",
-                    "upc_reader",
-                    "upc_e_reader"
-                ],
-                debug: {
-                    drawBoundingBox: false,
-                    showFrequency: false,
-                    drawScanline: false,
-                    showPattern: false
-                }
-            },
-            locate: true,
-            frequency: 15
-        }, function(err) {
-            if (err) {
-                console.error("Error inicializando Quagga:", err);
-                showStatus('Error al iniciar escáner', 'error');
-                detenerCamara();
-                return;
-            }
-            
-            Quagga.start();
-            
-            let detections = [];
-            
-            Quagga.onDetected(function(result) {
+        html5QrCode = new Html5Qrcode("reader");
+        
+        const config = {
+            fps: 15,
+            qrbox: { width: 280, height: 120 },
+            aspectRatio: 1.0,
+            formatsToSupport: [ 
+                Html5QrcodeSupportedFormats.EAN_13,
+                Html5QrcodeSupportedFormats.EAN_8,
+                Html5QrcodeSupportedFormats.UPC_A,
+                Html5QrcodeSupportedFormats.UPC_E,
+                Html5QrcodeSupportedFormats.CODE_39,
+                Html5QrcodeSupportedFormats.CODE_93,
+                Html5QrcodeSupportedFormats.CODE_128,
+                Html5QrcodeSupportedFormats.CODABAR,
+                Html5QrcodeSupportedFormats.ITF,
+                Html5QrcodeSupportedFormats.RSS_14,
+                Html5QrcodeSupportedFormats.RSS_EXPANDED
+            ]
+        };
+        
+        // Obtener cámara trasera
+        const cameraId = await getBackCamera();
+        
+        await html5QrCode.start(
+            cameraId,
+            config,
+            (decodedText) => {
                 if (!scannerActive) return;
                 
-                const code = result.codeResult.code;
-                const confidence = result.codeResult.confidence || 0;
-                const format = result.codeResult.format || '';
-                const now = Date.now();
+                const code = decodedText.trim();
                 
-                // Solo procesar si es un código de barras (no QR)
-                const isBarcode = format !== 'qr_code' && format !== 'qr' && format !== 'pdf417';
-                
-                if (code && code.length > 0 && confidence > 0.5 && isBarcode) {
-                    detections.push({ code, time: now, confidence });
-                    detections = detections.filter(d => now - d.time < 800);
-                    
-                    const sameCodeDetections = detections.filter(d => d.code === code);
-                    
-                    if (sameCodeDetections.length >= 3 && code !== lastAcceptedCode) {
-                        const codigoValido = /^[A-Z0-9\-]+$/.test(code);
-                        const longitudValida = code.length >= 4 && code.length <= 20;
-                        const tieneLetra = /[A-Z]/.test(code);
-                        
-                        if (codigoValido && longitudValida && tieneLetra) {
-                            lastAcceptedCode = code;
-                            lastAcceptedTime = now;
-                            scannerActive = false;
-                            detenerCamara();
-                            skuInput.value = code;
-                            verificarSku(code);
+                if (validarCodigoBarras(code)) {
+                    scannerActive = false;
+                    playBeep();
+                    vibrate();
+                    detenerCamara();
+                    skuInput.value = code;
+                    verificarSku(code);
+                } else {
+                    showStatus('⚠️ Código no válido, intenta nuevamente', 'error');
+                    setTimeout(() => {
+                        if (statusDiv.innerHTML === '⚠️ Código no válido, intenta nuevamente') {
+                            statusDiv.innerHTML = '';
                         }
-                    }
+                    }, 1500);
                 }
-            });
-            
-            showStatus('Cámara activa. Enfoca el código de barras (ignora QR).', '');
-        });
+            },
+            (errorMessage) => {
+                // Error de escaneo, ignorar
+                console.log(errorMessage);
+            }
+        );
+        
+        showStatus('📷 Cámara activa. Apunta al código de barras.', '');
         
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error al iniciar cámara:', error);
         showStatus('Error al acceder a la cámara', 'error');
         detenerCamara();
+    }
+}
+
+// Obtener cámara trasera
+async function getBackCamera() {
+    try {
+        const devices = await Html5Qrcode.getCameras();
+        
+        if (!devices || devices.length === 0) {
+            throw new Error('No se encontraron cámaras');
+        }
+        
+        // Buscar cámara trasera
+        let backCamera = devices.find(device => 
+            device.label.toLowerCase().includes('back') ||
+            device.label.toLowerCase().includes('environment') ||
+            device.label.toLowerCase().includes('rear') ||
+            device.label.toLowerCase().includes('trasera')
+        );
+        
+        if (!backCamera) {
+            backCamera = devices[0];
+        }
+        
+        return backCamera.id;
+        
+    } catch (error) {
+        console.error('Error obteniendo cámaras:', error);
+        throw error;
     }
 }
 
 // Detener cámara
 function detenerCamara() {
     scannerActive = false;
-    lastAcceptedCode = '';
     
-    if (Quagga) {
-        try {
-            Quagga.stop();
-        } catch(e) {}
+    if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+            html5QrCode.clear();
+            cameraContainer.style.display = 'none';
+        }).catch(() => {
+            cameraContainer.style.display = 'none';
+        });
+    } else {
+        cameraContainer.style.display = 'none';
     }
-    
-    cameraContainer.style.display = 'none';
+    html5QrCode = null;
 }
 
 // Verificar código con el backend
 async function verificarSku(sku) {
-    if (!validarCodigoBarras(sku)) {
-        showStatus('⚠️ Código no válido. Escanea nuevamente.', 'error');
-        skuInput.value = '';
-        skuInput.focus();
-        return;
-    }
-    
     showStatus('Buscando...', '');
     
     try {
@@ -224,8 +226,10 @@ async function verificarSku(sku) {
         const dataProducto = await resProducto.json();
         
         if (dataProducto.exists) {
+            playBeep();
             showAlert(dataProducto.producto);
         } else {
+            playBeep();
             const nombreArticulo = dataArticulo.exists ? currentArticulo.articulo : `📦 Producto: ${sku}`;
             showForm(sku, nombreArticulo);
         }
