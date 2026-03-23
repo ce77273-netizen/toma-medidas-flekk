@@ -5,7 +5,7 @@ const path = require('path');
 const { Pool } = require('pg');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8080;  // Cambiado a 8080 como fallback
 
 // Middleware
 app.use(cors());
@@ -30,6 +30,11 @@ pool.connect((err) => {
     } else {
         console.log('✅ Conectado a PostgreSQL correctamente');
     }
+});
+
+// ============== RUTA DE PRUEBA ==============
+app.get('/', (req, res) => {
+    res.send('✅ Servidor Toma de Medidas Flekk funcionando correctamente en puerto 8080');
 });
 
 // ============== API ENDPOINTS ==============
@@ -116,4 +121,5 @@ app.get('*', (req, res) => {
 app.listen(port, () => {
     console.log(`🚀 Servidor Toma de Medidas Flekk corriendo en http://localhost:${port}`);
     console.log(`📊 API disponible en http://localhost:${port}/api`);
+    console.log(`✅ Ruta de prueba: http://localhost:${port}/`);
 });
