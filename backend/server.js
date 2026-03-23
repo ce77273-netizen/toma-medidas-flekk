@@ -39,7 +39,34 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', service: 'Toma de Medidas Flekk', timestamp: new Date() });
 });
 
-// Verificar si un SKU existe
+// Buscar artículo por código (NUEVO ENDPOINT)
+app.get('/api/articulo/:codigo', async (req, res) => {
+    const { codigo } = req.params;
+    
+    try {
+        const result = await pool.query(
+            'SELECT codigo, articulo, disponible FROM articulos WHERE codigo = $1',
+            [codigo]
+        );
+        
+        if (result.rows.length > 0) {
+            res.json({ 
+                exists: true, 
+                articulo: result.rows[0] 
+            });
+        } else {
+            res.json({ 
+                exists: false, 
+                message: 'Código no encontrado en el inventario' 
+            });
+        }
+    } catch (error) {
+        console.error('Error al buscar artículo:', error);
+        res.status(500).json({ error: 'Error en el servidor' });
+    }
+});
+
+// Verificar si un SKU existe en productos (medidas)
 app.get('/api/producto/:sku', async (req, res) => {
     const { sku } = req.params;
     
@@ -60,7 +87,7 @@ app.get('/api/producto/:sku', async (req, res) => {
     }
 });
 
-// Registrar nuevo producto
+// Registrar nuevo producto (medidas)
 app.post('/api/productos', async (req, res) => {
     const { sku, alto, ancho, largo, tipo_empaque } = req.body;
     
@@ -94,11 +121,24 @@ app.post('/api/productos', async (req, res) => {
     }
 });
 
-// Obtener todos los productos
+// Obtener todos los productos (medidas)
 app.get('/api/productos', async (req, res) => {
     try {
         const result = await pool.query(
             'SELECT * FROM productos ORDER BY fecha_registro DESC LIMIT 100'
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Error en el servidor' });
+    }
+});
+
+// Obtener todos los artículos (inventario)
+app.get('/api/articulos', async (req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT * FROM articulos ORDER BY codigo ASC'
         );
         res.json(result.rows);
     } catch (error) {
