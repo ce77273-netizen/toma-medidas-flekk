@@ -395,3 +395,20 @@ button {
         width: 95%;
     }
 }
+/* Estilos para html5-qrcode */
+#reader {
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+#reader video {
+    width: 100%;
+    border-radius: 16px;
+}
+
+#reader__scan_region {
+    min-height: 300px;
+}
