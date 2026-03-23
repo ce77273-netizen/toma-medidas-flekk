@@ -48,7 +48,7 @@ body::before {
     animation: fadeInUp 0.6s ease-out;
 }
 
-/* Header Styles */
+/* ============== HEADER ============== */
 .header {
     text-align: center;
     margin-bottom: 2rem;
@@ -69,7 +69,7 @@ body::before {
     font-size: 0.9rem;
 }
 
-/* Cards */
+/* ============== CARDS ============== */
 .scanner-card, .form-card {
     background: white;
     border-radius: 24px;
@@ -84,7 +84,7 @@ body::before {
     box-shadow: 0 24px 48px rgba(0, 0, 0, 0.15);
 }
 
-/* Input Group */
+/* ============== INPUT GROUP ============== */
 .input-group {
     display: flex;
     gap: 1rem;
@@ -107,7 +107,7 @@ body::before {
     box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
 }
 
-/* Botones */
+/* ============== BOTONES ============== */
 button {
     padding: 1rem;
     border: none;
@@ -154,7 +154,7 @@ button {
     transform: scale(1.02);
 }
 
-/* Dimensions */
+/* ============== DIMENSIONES ============== */
 .dimensions {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -177,7 +177,7 @@ button {
     border-color: var(--primary);
 }
 
-/* Packaging Options */
+/* ============== EMPAQUE ============== */
 .packaging {
     display: flex;
     gap: 1rem;
@@ -206,213 +206,7 @@ button {
     transform: scale(1.02);
 }
 
-/* Camera Scanner Styles */
-.camera-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.95);
-    z-index: 2000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    animation: fadeIn 0.3s ease;
-}
-
-.camera-card {
-    background: white;
-    border-radius: 24px;
-    padding: 1.5rem;
-    width: 90%;
-    max-width: 500px;
-    text-align: center;
-    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
-}
-
-.camera-card video {
-    width: 100%;
-    border-radius: 16px;
-    background: #000;
-    margin-bottom: 1rem;
-}
-
-.camera-controls {
-    margin-top: 1rem;
-}
-
-.camera-controls button {
-    background: var(--danger);
-    color: white;
-    width: 100%;
-}
-
-.camera-hint {
-    margin-top: 0.75rem;
-    color: var(--gray);
-    font-size: 0.85rem;
-}
-
-/* Modal Alert */
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1500;
-    animation: fadeIn 0.3s ease;
-}
-
-.modal-content {
-    background: white;
-    padding: 2rem;
-    border-radius: 24px;
-    max-width: 400px;
-    width: 90%;
-    text-align: center;
-    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
-}
-
-.modal-content h3 {
-    color: var(--danger);
-    margin-bottom: 1rem;
-    font-size: 1.5rem;
-}
-
-.modal-content button {
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    color: white;
-    margin-top: 1rem;
-    width: 100%;
-}
-
-#alertDetails {
-    background: #f8f9fa;
-    padding: 1rem;
-    border-radius: 12px;
-    margin: 1rem 0;
-    text-align: left;
-}
-
-#alertDetails p {
-    margin: 0.5rem 0;
-}
-
-/* Status Message */
-.status {
-    margin-top: 1rem;
-    padding: 0.75rem;
-    border-radius: 12px;
-    font-size: 0.9rem;
-    text-align: center;
-    animation: fadeInUp 0.3s ease;
-}
-
-.status.error {
-    background: #fee;
-    color: var(--danger);
-    border-left: 4px solid var(--danger);
-}
-
-.status.success {
-    background: #e8f5e9;
-    color: var(--success);
-    border-left: 4px solid var(--success);
-}
-
-/* Animations */
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
-}
-
-/* Responsive */
-@media (max-width: 640px) {
-    body {
-        padding: 10px;
-    }
-    
-    .scanner-card, .form-card {
-        padding: 1.5rem;
-    }
-    
-    .dimensions {
-        grid-template-columns: 1fr;
-        gap: 0.75rem;
-    }
-    
-    .packaging {
-        flex-direction: column;
-    }
-    
-    .input-group {
-        flex-direction: column;
-    }
-    
-    .btn-camera {
-        width: 100%;
-    }
-    
-    .camera-card {
-        padding: 1rem;
-        width: 95%;
-    }
-    
-    .modal-content {
-        padding: 1.5rem;
-        width: 95%;
-    }
-}
-/* Estilos para html5-qrcode */
-#reader {
-    width: 100%;
-    max-width: 500px;
-    margin: 0 auto;
-    border-radius: 16px;
-    overflow: hidden;
-}
-
-#reader video {
-    width: 100%;
-    border-radius: 16px;
-}
-
-#reader__scan_region {
-    min-height: 300px;
-}
-/* Product info styles */
+/* ============== INFORMACIÓN DEL PRODUCTO ============== */
 .product-info {
     background: #f8f9fa;
     padding: 1rem;
@@ -456,32 +250,223 @@ button {
     margin-top: 1.5rem;
 }
 
-#saveBtn {
-    flex: 1;
-    background: linear-gradient(135deg, var(--success), #219B8A);
-    color: white;
-    border: none;
-    padding: 1rem;
-    border-radius: 16px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.3s ease;
+/* ============== CÁMARA Y ESCÁNER ============== */
+.camera-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
 }
 
-#cancelBtn {
-    flex: 1;
-    background: var(--gray);
-    color: white;
-    border: none;
-    padding: 1rem;
-    border-radius: 16px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.3s ease;
+.camera-card {
+    background: white;
+    border-radius: 24px;
+    padding: 1.5rem;
+    width: 90%;
+    max-width: 500px;
+    text-align: center;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
 }
 
-/* Responsive */
+/* Contenedor del escáner con guía visual */
+#scanner-container {
+    position: relative;
+    width: 100%;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+#scanner-container::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 85%;
+    height: 35%;
+    border: 3px solid #FF6B35;
+    border-radius: 12px;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    z-index: 10;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        border-color: #FF6B35;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+    }
+    50% {
+        border-color: #FF9F1C;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+    }
+}
+
+#scanner-container video {
+    width: 100%;
+    border-radius: 16px;
+    background: #000;
+}
+
+.camera-controls {
+    margin-top: 1rem;
+}
+
+.camera-controls button {
+    background: var(--danger);
+    color: white;
+    width: 100%;
+}
+
+.camera-hint {
+    margin-top: 0.75rem;
+    color: #FF6B35;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+/* ============== MODAL ============== */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1500;
+    animation: fadeIn 0.3s ease;
+}
+
+.modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 24px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content h3 {
+    color: var(--danger);
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+}
+
+#alertDetails {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 12px;
+    margin: 1rem 0;
+    text-align: left;
+}
+
+#alertDetails p {
+    margin: 0.5rem 0;
+}
+
+/* ============== STATUS MESSAGE ============== */
+.status {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    text-align: center;
+    animation: fadeInUp 0.3s ease;
+}
+
+.status.error {
+    background: #fee;
+    color: var(--danger);
+    border-left: 4px solid var(--danger);
+}
+
+.status.success {
+    background: #e8f5e9;
+    color: var(--success);
+    border-left: 4px solid var(--success);
+}
+
+/* ============== ANIMACIONES ============== */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* ============== RESPONSIVE ============== */
 @media (max-width: 640px) {
+    body {
+        padding: 10px;
+    }
+    
+    .scanner-card, .form-card {
+        padding: 1.5rem;
+    }
+    
+    .dimensions {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+    
+    .packaging {
+        flex-direction: column;
+    }
+    
+    .input-group {
+        flex-direction: column;
+    }
+    
+    .btn-camera {
+        width: 100%;
+    }
+    
+    .camera-card {
+        padding: 1rem;
+        width: 95%;
+    }
+    
+    .modal-content {
+        padding: 1.5rem;
+        width: 95%;
+    }
+    
     .product-info {
         flex-direction: column;
         text-align: center;
@@ -490,4 +475,27 @@ button {
     .form-actions {
         flex-direction: column;
     }
+    
+    #scanner-container::after {
+        width: 90%;
+        height: 40%;
+    }
+}
+
+/* ============== HTML5-QRCODE (respaldo) ============== */
+#reader {
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+#reader video {
+    width: 100%;
+    border-radius: 16px;
+}
+
+#reader__scan_region {
+    min-height: 300px;
 }
