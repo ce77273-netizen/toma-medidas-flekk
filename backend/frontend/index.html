@@ -26,7 +26,7 @@
         <!-- Visor de cámara -->
         <div id="cameraContainer" class="camera-container" style="display:none;">
             <div class="camera-card">
-                <video id="scanner-video" playsinline style="width: 100%; border-radius: 16px; background: #000;"></video>
+                <div id="reader" style="width: 100%;"></div>
                 <div class="camera-controls">
                     <button id="closeCameraBtn">❌ Cancelar</button>
                 </div>
@@ -77,8 +77,8 @@
         </div>
     </div>
 
-    <!-- Librería Instascan desde CDN confiable -->
-    <script src="https://cdn.jsdelivr.net/npm/instascan@1.0.0/instascan.min.js"></script>
+    <!-- Librería html5-qrcode -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
