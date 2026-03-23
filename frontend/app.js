@@ -1,7 +1,7 @@
 const API_URL = window.location.origin + '/api';
 let currentSku = null;
 let selectedPack = null;
-let html5QrCode = null;
+let scannerActive = false;
 
 // Elementos DOM
 const skuInput = document.getElementById('skuInput');
@@ -35,102 +35,93 @@ closeCameraBtn.onclick = () => {
     detenerCamara();
 };
 
-// Iniciar cámara con html5-qrcode
+// Iniciar cámara con Quagga (especializado en códigos de barras)
 async function iniciarCamara() {
     try {
         cameraContainer.style.display = 'block';
+        scannerActive = true;
         
-        html5QrCode = new Html5Qrcode("reader");
-        
-        const config = {
-            fps: 10,
-            qrbox: { width: 250, height: 100 },
-            aspectRatio: 1.0,
-            formatsToSupport: [ 
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.UPC_A,
-                Html5QrcodeSupportedFormats.UPC_E,
-                Html5QrcodeSupportedFormats.CODE_39,
-                Html5QrcodeSupportedFormats.CODE_93,
-                Html5QrcodeSupportedFormats.CODE_128,
-                Html5QrcodeSupportedFormats.CODABAR,
-                Html5QrcodeSupportedFormats.ITF,
-                Html5QrcodeSupportedFormats.RSS_14,
-                Html5QrcodeSupportedFormats.RSS_EXPANDED
-            ]
-        };
-        
-        // Forzar cámara trasera
-        const cameraId = await getBackCamera();
-        
-        await html5QrCode.start(
-            cameraId,
-            config,
-            (decodedText) => {
-                // Código detectado
-                detenerCamara();
-                skuInput.value = decodedText;
-                verificarSku(decodedText);
+        // Configuración de Quagga
+        Quagga.init({
+            inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                target: document.querySelector('#scanner-container'),
+                constraints: {
+                    facingMode: "environment",
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                },
             },
-            (errorMessage) => {
-                // Error de escaneo, ignorar
-                console.log(errorMessage);
+            locator: {
+                patchSize: "medium",
+                halfSample: true
+            },
+            numOfWorkers: navigator.hardwareConcurrency || 4,
+            decoder: {
+                readers: [
+                    "code_128_reader",
+                    "ean_reader",
+                    "ean_8_reader",
+                    "code_39_reader",
+                    "code_93_reader",
+                    "codabar_reader",
+                    "upc_reader",
+                    "upc_e_reader",
+                    "i2of5_reader"
+                ],
+                debug: {
+                    drawBoundingBox: false,
+                    showFrequency: false,
+                    drawScanline: false,
+                    showPattern: false
+                }
+            },
+            locate: true
+        }, function(err) {
+            if (err) {
+                console.error("Error inicializando Quagga:", err);
+                showStatus('Error al iniciar escáner', 'error');
+                detenerCamara();
+                return;
             }
-        );
-        
-        showStatus('Cámara activa. Apunta al código de barras.', '');
+            
+            Quagga.start();
+            
+            // Detectar códigos
+            Quagga.onDetected(function(result) {
+                if (!scannerActive) return;
+                
+                const code = result.codeResult.code;
+                if (code && code.length > 0) {
+                    scannerActive = false;
+                    detenerCamara();
+                    skuInput.value = code;
+                    verificarSku(code);
+                }
+            });
+            
+            showStatus('Cámara activa. Apunta al código de barras.', '');
+        });
         
     } catch (error) {
-        console.error('Error al iniciar cámara:', error);
-        showStatus('Error al acceder a la cámara. Verifica los permisos.', 'error');
+        console.error('Error:', error);
+        showStatus('Error al acceder a la cámara', 'error');
         detenerCamara();
-    }
-}
-
-// Obtener cámara trasera
-async function getBackCamera() {
-    try {
-        const devices = await Html5Qrcode.getCameras();
-        
-        if (!devices || devices.length === 0) {
-            throw new Error('No se encontraron cámaras');
-        }
-        
-        // Buscar cámara trasera
-        let backCamera = devices.find(device => 
-            device.label.toLowerCase().includes('back') ||
-            device.label.toLowerCase().includes('environment') ||
-            device.label.toLowerCase().includes('rear') ||
-            device.label.toLowerCase().includes('trasera')
-        );
-        
-        // Si no hay trasera, usar la primera
-        if (!backCamera) {
-            backCamera = devices[0];
-        }
-        
-        return backCamera.id;
-        
-    } catch (error) {
-        console.error('Error obteniendo cámaras:', error);
-        throw error;
     }
 }
 
 // Detener cámara
 function detenerCamara() {
-    if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().then(() => {
-            html5QrCode.clear();
-            cameraContainer.style.display = 'none';
-        }).catch(() => {
-            cameraContainer.style.display = 'none';
-        });
-    } else {
-        cameraContainer.style.display = 'none';
+    scannerActive = false;
+    
+    if (Quagga) {
+        try {
+            Quagga.stop();
+        } catch(e) {}
     }
-    html5QrCode = null;
+    
+    cameraContainer.style.display = 'none';
 }
 
 // Verificar SKU con el backend
