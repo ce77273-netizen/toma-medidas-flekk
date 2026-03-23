@@ -5,7 +5,7 @@ const path = require('path');
 const { Pool } = require('pg');
 
 const app = express();
-const port = process.env.PORT || 8080;  // Cambiado a 8080 como fallback
+const port = process.env.PORT || 3000;  // Cambiado a 8080 como fallback
 
 // Middleware
 app.use(cors());
