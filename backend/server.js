@@ -11,8 +11,8 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Servir archivos estáticos del frontend
-app.use(express.static(path.join(__dirname, '../frontend')));
+// Servir archivos estáticos del frontend (AHORA DENTRO DE BACKEND)
+app.use(express.static(path.join(__dirname, 'frontend')));
 
 // Configuración de PostgreSQL
 const pool = new Pool({
@@ -110,7 +110,7 @@ app.get('/api/productos', async (req, res) => {
 // ============== SERVIR FRONTEND ==============
 // Cualquier ruta que no sea API sirve el index.html
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/index.html'));
+    res.sendFile(path.join(__dirname, 'frontend/index.html'));
 });
 
 // Iniciar servidor
