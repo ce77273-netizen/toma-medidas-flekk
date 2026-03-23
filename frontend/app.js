@@ -1,15 +1,13 @@
 const API_URL = window.location.origin + '/api';
 let currentSku = null;
 let selectedPack = null;
-let currentStream = null;
-let scanningActive = false;
+let html5QrCode = null;
 
 // Elementos DOM
 const skuInput = document.getElementById('skuInput');
 const scanBtn = document.getElementById('scanBtn');
 const scanCameraBtn = document.getElementById('scanCameraBtn');
 const cameraContainer = document.getElementById('cameraContainer');
-const video = document.getElementById('video');
 const closeCameraBtn = document.getElementById('closeCameraBtn');
 const formContainer = document.getElementById('formContainer');
 const displaySku = document.getElementById('displaySku');
@@ -27,9 +25,9 @@ scanBtn.onclick = async () => {
     await verificarSku(sku);
 };
 
-// Abrir cámara trasera
+// Abrir cámara
 scanCameraBtn.onclick = async () => {
-    await iniciarCamaraTrasera();
+    await iniciarCamara();
 };
 
 // Cerrar cámara
@@ -37,134 +35,102 @@ closeCameraBtn.onclick = () => {
     detenerCamara();
 };
 
-// Iniciar cámara trasera
-async function iniciarCamaraTrasera() {
+// Iniciar cámara con html5-qrcode
+async function iniciarCamara() {
     try {
         cameraContainer.style.display = 'block';
-        scanningActive = true;
         
-        // Configuración para cámara trasera
-        const constraints = {
-            video: { facingMode: { exact: "environment" } }
+        html5QrCode = new Html5Qrcode("reader");
+        
+        const config = {
+            fps: 10,
+            qrbox: { width: 250, height: 100 },
+            aspectRatio: 1.0,
+            formatsToSupport: [ 
+                Html5QrcodeSupportedFormats.EAN_13,
+                Html5QrcodeSupportedFormats.EAN_8,
+                Html5QrcodeSupportedFormats.UPC_A,
+                Html5QrcodeSupportedFormats.UPC_E,
+                Html5QrcodeSupportedFormats.CODE_39,
+                Html5QrcodeSupportedFormats.CODE_93,
+                Html5QrcodeSupportedFormats.CODE_128,
+                Html5QrcodeSupportedFormats.CODABAR,
+                Html5QrcodeSupportedFormats.ITF,
+                Html5QrcodeSupportedFormats.RSS_14,
+                Html5QrcodeSupportedFormats.RSS_EXPANDED
+            ]
         };
         
-        try {
-            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-            video.srcObject = currentStream;
-            await video.play();
-            showStatus('Cámara activa. Apunta al código de barras.', '');
-            iniciarEscaner();
-        } catch (err) {
-            // Si falla, buscar cámara trasera manualmente
-            await buscarCamaraTraseraManual();
-        }
+        // Forzar cámara trasera
+        const cameraId = await getBackCamera();
+        
+        await html5QrCode.start(
+            cameraId,
+            config,
+            (decodedText) => {
+                // Código detectado
+                detenerCamara();
+                skuInput.value = decodedText;
+                verificarSku(decodedText);
+            },
+            (errorMessage) => {
+                // Error de escaneo, ignorar
+                console.log(errorMessage);
+            }
+        );
+        
+        showStatus('Cámara activa. Apunta al código de barras.', '');
         
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error al iniciar cámara:', error);
         showStatus('Error al acceder a la cámara. Verifica los permisos.', 'error');
         detenerCamara();
     }
 }
 
-// Buscar cámara trasera manualmente
-async function buscarCamaraTraseraManual() {
+// Obtener cámara trasera
+async function getBackCamera() {
     try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        const devices = await Html5Qrcode.getCameras();
+        
+        if (!devices || devices.length === 0) {
+            throw new Error('No se encontraron cámaras');
+        }
         
         // Buscar cámara trasera
-        let backCamera = videoDevices.find(device => 
+        let backCamera = devices.find(device => 
             device.label.toLowerCase().includes('back') ||
             device.label.toLowerCase().includes('environment') ||
             device.label.toLowerCase().includes('rear') ||
-            device.label.toLowerCase().includes('trasera') ||
-            device.label.toLowerCase().includes('cámara trasera')
+            device.label.toLowerCase().includes('trasera')
         );
         
-        if (!backCamera && videoDevices.length > 0) {
-            backCamera = videoDevices[0];
-        }
-        
+        // Si no hay trasera, usar la primera
         if (!backCamera) {
-            throw new Error('No se encontró cámara');
+            backCamera = devices[0];
         }
         
-        currentStream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: { exact: backCamera.deviceId } }
-        });
-        
-        video.srcObject = currentStream;
-        await video.play();
-        showStatus('Cámara trasera activa. Apunta al código de barras.', '');
-        iniciarEscaner();
+        return backCamera.id;
         
     } catch (error) {
-        console.error('Error:', error);
-        showStatus('No se pudo acceder a la cámara trasera', 'error');
-        detenerCamara();
+        console.error('Error obteniendo cámaras:', error);
+        throw error;
     }
-}
-
-// Iniciar escáner
-function iniciarEscaner() {
-    if (!video.srcObject) return;
-    
-    // Crear canvas para capturar frames
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    
-    function capturarFrame() {
-        if (!scanningActive || !video.videoWidth || !video.videoHeight) {
-            if (scanningActive) requestAnimationFrame(capturarFrame);
-            return;
-        }
-        
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // Obtener imagen para procesar
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-        
-        // Usar ZXing para leer códigos
-        try {
-            const result = ZXing.BrowserMultiFormatReader.prototype.decodeBitmapFromImageData(imageData, canvas.width, canvas.height);
-            if (result && result.text) {
-                const sku = result.text.trim();
-                if (sku.length > 0) {
-                    detenerCamara();
-                    skuInput.value = sku;
-                    verificarSku(sku);
-                    return;
-                }
-            }
-        } catch(e) {
-            // No se detectó código, continuar
-        }
-        
-        if (scanningActive) {
-            requestAnimationFrame(capturarFrame);
-        }
-    }
-    
-    requestAnimationFrame(capturarFrame);
 }
 
 // Detener cámara
 function detenerCamara() {
-    scanningActive = false;
-    
-    if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-        currentStream = null;
+    if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+            html5QrCode.clear();
+            cameraContainer.style.display = 'none';
+        }).catch(() => {
+            cameraContainer.style.display = 'none';
+        });
+    } else {
+        cameraContainer.style.display = 'none';
     }
-    
-    if (video.srcObject) {
-        video.srcObject = null;
-    }
-    
-    cameraContainer.style.display = 'none';
-    video.srcObject = null;
+    html5QrCode = null;
 }
 
 // Verificar SKU con el backend
