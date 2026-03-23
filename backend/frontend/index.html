@@ -23,14 +23,17 @@
             <div id="status"></div>
         </div>
 
-        <!-- Visor de cámara -->
+        <!-- Visor de cámara con Quagga -->
         <div id="cameraContainer" class="camera-container" style="display:none;">
             <div class="camera-card">
-                <div id="reader" style="width: 100%;"></div>
+                <div id="interactive" class="viewport" style="width: 100%; position: relative;">
+                    <video id="scanner-video" autoplay playsinline style="width: 100%; border-radius: 16px;"></video>
+                    <canvas id="scanner-canvas" style="display: none;"></canvas>
+                </div>
                 <div class="camera-controls">
                     <button id="closeCameraBtn">❌ Cancelar</button>
                 </div>
-                <p class="camera-hint">🎯 Apunta al código de barras</p>
+                <p class="camera-hint">🎯 Enfoca el código de barras</p>
             </div>
         </div>
 
@@ -78,7 +81,7 @@
     </div>
 
     <!-- Librerías -->
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://unpkg.com/@ericblade/quagga2@1.8.2/dist/quagga.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
