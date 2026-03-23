@@ -1,8 +1,8 @@
 const API_URL = window.location.origin + '/api';
 let currentSku = null;
 let selectedPack = null;
-let codeReader = null;
 let currentStream = null;
+let scanningActive = false;
 
 // Elementos DOM
 const skuInput = document.getElementById('skuInput');
@@ -27,7 +27,7 @@ scanBtn.onclick = async () => {
     await verificarSku(sku);
 };
 
-// Abrir cámara trasera para escanear
+// Abrir cámara trasera
 scanCameraBtn.onclick = async () => {
     await iniciarCamaraTrasera();
 };
@@ -37,133 +37,125 @@ closeCameraBtn.onclick = () => {
     detenerCamara();
 };
 
-// Iniciar SOLO cámara trasera
+// Iniciar cámara trasera
 async function iniciarCamaraTrasera() {
     try {
         cameraContainer.style.display = 'block';
+        scanningActive = true;
         
-        // Configuración para forzar cámara trasera
+        // Configuración para cámara trasera
         const constraints = {
-            video: {
-                facingMode: { exact: "environment" }  // Fuerza cámara trasera
-            }
+            video: { facingMode: { exact: "environment" } }
         };
         
-        // Intentar obtener cámara trasera directamente
         try {
             currentStream = await navigator.mediaDevices.getUserMedia(constraints);
             video.srcObject = currentStream;
             await video.play();
-            
-            // Inicializar lector SOLO para códigos de barras (excluir QR)
-            codeReader = new ZXing.BrowserMultiFormatReader();
-            
-            // Escanear continuamente
-            scanBarcode();
-            
+            showStatus('Cámara activa. Apunta al código de barras.', '');
+            iniciarEscaner();
         } catch (err) {
-            // Si falla "environment", intentar con facingMode normal y buscar trasera manualmente
-            console.log("No se pudo obtener cámara trasera directamente, buscando manualmente...");
+            // Si falla, buscar cámara trasera manualmente
             await buscarCamaraTraseraManual();
         }
         
     } catch (error) {
-        console.error('Error al iniciar cámara:', error);
+        console.error('Error:', error);
         showStatus('Error al acceder a la cámara. Verifica los permisos.', 'error');
         detenerCamara();
     }
 }
 
-// Método alternativo para encontrar la cámara trasera
+// Buscar cámara trasera manualmente
 async function buscarCamaraTraseraManual() {
     try {
-        // Obtener todos los dispositivos de video
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(device => device.kind === 'videoinput');
         
-        // Buscar cámara trasera (usualmente contiene "back", "environment", "rear")
+        // Buscar cámara trasera
         let backCamera = videoDevices.find(device => 
             device.label.toLowerCase().includes('back') ||
             device.label.toLowerCase().includes('environment') ||
             device.label.toLowerCase().includes('rear') ||
-            device.label.toLowerCase().includes('trasera')
+            device.label.toLowerCase().includes('trasera') ||
+            device.label.toLowerCase().includes('cámara trasera')
         );
         
-        // Si no encuentra trasera, usar la primera cámara
         if (!backCamera && videoDevices.length > 0) {
             backCamera = videoDevices[0];
-            showStatus('Usando cámara predeterminada', '');
         }
         
         if (!backCamera) {
             throw new Error('No se encontró cámara');
         }
         
-        const stream = await navigator.mediaDevices.getUserMedia({
+        currentStream = await navigator.mediaDevices.getUserMedia({
             video: { deviceId: { exact: backCamera.deviceId } }
         });
         
-        currentStream = stream;
         video.srcObject = currentStream;
         await video.play();
-        
-        codeReader = new ZXing.BrowserMultiFormatReader();
-        scanBarcode();
+        showStatus('Cámara trasera activa. Apunta al código de barras.', '');
+        iniciarEscaner();
         
     } catch (error) {
-        console.error('Error al buscar cámara trasera:', error);
+        console.error('Error:', error);
         showStatus('No se pudo acceder a la cámara trasera', 'error');
         detenerCamara();
     }
 }
 
-// Escanear SOLO códigos de barras (ignorar QR)
-function scanBarcode() {
-    if (!codeReader || !video.srcObject) return;
+// Iniciar escáner
+function iniciarEscaner() {
+    if (!video.srcObject) return;
     
-    // Configurar para leer solo códigos de barras
-    // ZXing intenta con todos los formatos, pero solo procesamos si es código de barras
-    codeReader.decodeFromVideoElement(video, (result, err) => {
-        if (result) {
-            const text = result.text;
-            const format = result.format;
-            
-            // Lista de formatos que son códigos de barras (excluir QR)
-            const barcodeFormats = [
-                'EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 
-                'CODE_39', 'CODE_93', 'CODE_128', 'CODABAR',
-                'ITF', 'RSS_14', 'RSS_EXPANDED'
-            ];
-            
-            // Verificar si es un código de barras (no QR)
-            const isBarcode = barcodeFormats.includes(format) || 
-                              !format?.includes('QR');  // Si el formato no contiene QR
-            
-            if (isBarcode && text && text.length > 0) {
-                detenerCamara();
-                skuInput.value = text;
-                verificarSku(text);
-            } else if (format?.includes('QR')) {
-                // Si es QR, ignorar y mostrar mensaje
-                showStatus('📱 Por favor escanea el código de BARRAS, no el QR', 'error');
-            }
+    // Crear canvas para capturar frames
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    
+    function capturarFrame() {
+        if (!scanningActive || !video.videoWidth || !video.videoHeight) {
+            if (scanningActive) requestAnimationFrame(capturarFrame);
+            return;
         }
-    });
+        
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Obtener imagen para procesar
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // Usar ZXing para leer códigos
+        try {
+            const result = ZXing.BrowserMultiFormatReader.prototype.decodeBitmapFromImageData(imageData, canvas.width, canvas.height);
+            if (result && result.text) {
+                const sku = result.text.trim();
+                if (sku.length > 0) {
+                    detenerCamara();
+                    skuInput.value = sku;
+                    verificarSku(sku);
+                    return;
+                }
+            }
+        } catch(e) {
+            // No se detectó código, continuar
+        }
+        
+        if (scanningActive) {
+            requestAnimationFrame(capturarFrame);
+        }
+    }
+    
+    requestAnimationFrame(capturarFrame);
 }
 
 // Detener cámara
 function detenerCamara() {
-    if (codeReader) {
-        try {
-            codeReader.reset();
-        } catch(e) {}
-        codeReader = null;
-    }
+    scanningActive = false;
     
     if (currentStream) {
-        currentStream.getTracks().forEach(track => {
-            track.stop();
-        });
+        currentStream.getTracks().forEach(track => track.stop());
         currentStream = null;
     }
     
@@ -172,6 +164,7 @@ function detenerCamara() {
     }
     
     cameraContainer.style.display = 'none';
+    video.srcObject = null;
 }
 
 // Verificar SKU con el backend
@@ -204,13 +197,8 @@ saveBtn.onclick = async () => {
         return;
     }
     
-    if (isNaN(alto) || isNaN(ancho) || isNaN(largo)) {
-        showStatus('Ingresa todas las medidas', 'error');
-        return;
-    }
-    
-    if (alto <= 0 || ancho <= 0 || largo <= 0) {
-        showStatus('Las medidas deben ser mayores a 0', 'error');
+    if (isNaN(alto) || isNaN(ancho) || isNaN(largo) || alto <= 0 || ancho <= 0 || largo <= 0) {
+        showStatus('Ingresa medidas válidas (mayores a 0)', 'error');
         return;
     }
     
