@@ -1,123 +1,129 @@
-// Configuración
 const API_URL = window.location.origin + '/api';
 let currentSku = null;
-let selectedPackaging = null;
+let selectedPack = null;
+let codeReader = null;
+let videoStream = null;
 
 // Elementos DOM
-const barcodeInput = document.getElementById('barcodeInput');
+const skuInput = document.getElementById('skuInput');
 const scanBtn = document.getElementById('scanBtn');
-const formSection = document.getElementById('formSection');
+const scanCameraBtn = document.getElementById('scanCameraBtn');
+const cameraContainer = document.getElementById('cameraContainer');
+const video = document.getElementById('video');
+const closeCameraBtn = document.getElementById('closeCameraBtn');
+const formContainer = document.getElementById('formContainer');
 const displaySku = document.getElementById('displaySku');
-const altoInput = document.getElementById('alto');
-const anchoInput = document.getElementById('ancho');
-const largoInput = document.getElementById('largo');
 const saveBtn = document.getElementById('saveBtn');
 const cancelBtn = document.getElementById('cancelBtn');
-const existingAlert = document.getElementById('existingAlert');
-const loadingOverlay = document.getElementById('loadingOverlay');
+const statusDiv = document.getElementById('status');
 
-// Event Listeners
-scanBtn.addEventListener('click', handleScan);
-barcodeInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') handleScan();
-});
-saveBtn.addEventListener('click', saveProduct);
-cancelBtn.addEventListener('click', resetForm);
-
-// Packaging selection
-document.querySelectorAll('.pack-option').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.pack-option').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        selectedPackaging = btn.dataset.pack;
-    });
-});
-
-// Función para escanear/verificar SKU
-async function handleScan() {
-    const sku = barcodeInput.value.trim();
+// Verificar SKU manual
+scanBtn.onclick = async () => {
+    const sku = skuInput.value.trim();
     if (!sku) {
-        showStatus('Por favor ingresa o escanea un código SKU', 'error');
+        showStatus('Ingresa un SKU', 'error');
         return;
     }
-    
-    currentSku = sku;
-    showLoading(true);
+    await verificarSku(sku);
+};
+
+// Abrir cámara para escanear
+scanCameraBtn.onclick = async () => {
+    await iniciarCamara();
+};
+
+// Cerrar cámara
+closeCameraBtn.onclick = () => {
+    detenerCamara();
+};
+
+// Iniciar cámara y escáner
+async function iniciarCamara() {
+    try {
+        cameraContainer.style.display = 'block';
+        
+        // Inicializar lector de códigos
+        codeReader = new ZXing.BrowserMultiFormatReader();
+        
+        // Obtener lista de cámaras
+        const videoInputDevices = await codeReader.listVideoInputDevices();
+        
+        if (videoInputDevices.length === 0) {
+            showStatus('No se encontró cámara', 'error');
+            detenerCamara();
+            return;
+        }
+        
+        // Usar la cámara trasera si está disponible
+        const backCamera = videoInputDevices.find(device => 
+            device.label.toLowerCase().includes('back') || 
+            device.label.toLowerCase().includes('environment')
+        );
+        
+        const selectedDeviceId = backCamera ? backCamera.deviceId : videoInputDevices[0].deviceId;
+        
+        // Decodificar continuamente
+        await codeReader.decodeFromVideoDevice(selectedDeviceId, video, (result, err) => {
+            if (result) {
+                const sku = result.text.trim();
+                detenerCamara();
+                skuInput.value = sku;
+                verificarSku(sku);
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error al iniciar cámara:', error);
+        showStatus('Error al acceder a la cámara. Verifica los permisos.', 'error');
+        detenerCamara();
+    }
+}
+
+// Detener cámara
+function detenerCamara() {
+    if (codeReader) {
+        codeReader.reset();
+        codeReader = null;
+    }
+    if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
+    }
+    cameraContainer.style.display = 'none';
+}
+
+// Verificar SKU con el backend
+async function verificarSku(sku) {
+    showStatus('Buscando...', '');
     
     try {
-        const response = await fetch(`${API_URL}/producto/${encodeURIComponent(sku)}`);
-        const data = await response.json();
+        const res = await fetch(`${API_URL}/producto/${encodeURIComponent(sku)}`);
+        const data = await res.json();
         
-        if (response.ok && data.exists) {
-            // Producto ya existe
-            showExistingProduct(data.producto);
+        if (data.exists) {
+            showAlert(data.producto);
         } else {
-            // Producto nuevo
-            showRegistrationForm(sku);
+            showForm(sku);
         }
     } catch (error) {
         console.error('Error:', error);
-        showStatus('Error al conectar con el servidor. Verifica tu conexión.', 'error');
-    } finally {
-        showLoading(false);
+        showStatus('Error de conexión con el servidor', 'error');
     }
 }
 
-// Mostrar formulario de registro
-function showRegistrationForm(sku) {
-    formSection.style.display = 'block';
-    displaySku.textContent = sku;
-    resetFormFields();
-    barcodeInput.value = '';
-    showStatus('', '');
-    
-    // Limpiar mensajes anteriores
-    const statusDiv = document.getElementById('scannerStatus');
-    statusDiv.textContent = '';
-    statusDiv.className = 'status-message';
-    
-    // Scroll suave al formulario
-    setTimeout(() => {
-        formSection.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
-    
-    // Enfocar primera medida
-    altoInput.focus();
-}
-
-// Mostrar producto existente
-function showExistingProduct(producto) {
-    const detailsDiv = document.getElementById('existingDetails');
-    const tipoEmpaqueTexto = {
-        'caja': '📦 Caja',
-        'bolsa': '🛍️ Bolsa',
-        'ninguno': '📦 Sin empaque'
-    };
-    
-    detailsDiv.innerHTML = `
-        <p><strong>📋 SKU:</strong> ${producto.sku}</p>
-        <p><strong>📏 Medidas:</strong> ${producto.alto} cm × ${producto.ancho} cm × ${producto.largo} cm</p>
-        <p><strong>📦 Empaque:</strong> ${tipoEmpaqueTexto[producto.tipo_empaque] || producto.tipo_empaque}</p>
-        <p><strong>📅 Registrado:</strong> ${new Date(producto.fecha_registro).toLocaleDateString('es-ES')}</p>
-    `;
-    existingAlert.style.display = 'block';
-    barcodeInput.value = '';
-    barcodeInput.focus();
-}
-
 // Guardar producto
-async function saveProduct() {
-    const alto = parseFloat(altoInput.value);
-    const ancho = parseFloat(anchoInput.value);
-    const largo = parseFloat(largoInput.value);
+saveBtn.onclick = async () => {
+    const alto = parseFloat(document.getElementById('alto').value);
+    const ancho = parseFloat(document.getElementById('ancho').value);
+    const largo = parseFloat(document.getElementById('largo').value);
     
-    if (!selectedPackaging) {
-        showStatus('Por favor selecciona el tipo de empaque', 'error');
+    if (!selectedPack) {
+        showStatus('Selecciona tipo de empaque', 'error');
         return;
     }
     
     if (isNaN(alto) || isNaN(ancho) || isNaN(largo)) {
-        showStatus('Por favor ingresa todas las medidas válidas (números positivos)', 'error');
+        showStatus('Ingresa todas las medidas', 'error');
         return;
     }
     
@@ -126,118 +132,101 @@ async function saveProduct() {
         return;
     }
     
-    const producto = {
-        sku: currentSku,
-        alto,
-        ancho,
-        largo,
-        tipo_empaque: selectedPackaging
-    };
-    
-    showLoading(true);
-    
     try {
-        const response = await fetch(`${API_URL}/productos`, {
+        const res = await fetch(`${API_URL}/productos`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(producto)
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sku: currentSku,
+                alto, ancho, largo,
+                tipo_empaque: selectedPack
+            })
         });
         
-        const data = await response.json();
-        
-        if (response.ok) {
-            showStatus('✅ Producto registrado exitosamente!', 'success');
-            resetForm();
+        if (res.ok) {
+            showStatus('✅ Producto guardado!', 'success');
             setTimeout(() => {
-                formSection.style.display = 'none';
-                const statusDiv = document.getElementById('scannerStatus');
-                statusDiv.textContent = '';
-                statusDiv.className = 'status-message';
-                barcodeInput.focus();
-            }, 2000);
+                formContainer.style.display = 'none';
+                skuInput.value = '';
+                skuInput.focus();
+                resetForm();
+            }, 1500);
         } else {
-            showStatus(data.error || 'Error al guardar el producto', 'error');
+            const error = await res.json();
+            showStatus(error.error || 'Error al guardar', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        showStatus('Error de conexión con el servidor', 'error');
-    } finally {
-        showLoading(false);
+        showStatus('Error al guardar', 'error');
     }
+};
+
+cancelBtn.onclick = () => {
+    formContainer.style.display = 'none';
+    skuInput.value = '';
+    skuInput.focus();
+    resetForm();
+};
+
+// Selección de tipo de empaque
+document.querySelectorAll('.packBtn').forEach(btn => {
+    btn.onclick = () => {
+        document.querySelectorAll('.packBtn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedPack = btn.dataset.pack;
+    };
+});
+
+function showForm(sku) {
+    formContainer.style.display = 'block';
+    displaySku.textContent = sku;
+    currentSku = sku;
+    statusDiv.innerHTML = '';
+    skuInput.value = '';
+    // Scroll al formulario
+    formContainer.scrollIntoView({ behavior: 'smooth' });
 }
 
-// Resetear formulario
-function resetForm() {
-    resetFormFields();
-    currentSku = null;
-    selectedPackaging = null;
-    barcodeInput.value = '';
-    barcodeInput.focus();
-    formSection.style.display = 'none';
+function showAlert(producto) {
+    const modal = document.getElementById('alertModal');
+    const details = document.getElementById('alertDetails');
+    const tipoTexto = { caja: '📦 Caja', bolsa: '🛍️ Bolsa', ninguno: '📦 Sin empaque' };
+    
+    details.innerHTML = `
+        <p><strong>SKU:</strong> ${producto.sku}</p>
+        <p><strong>Medidas:</strong> ${producto.alto} x ${producto.ancho} x ${producto.largo} cm</p>
+        <p><strong>Empaque:</strong> ${tipoTexto[producto.tipo_empaque] || producto.tipo_empaque}</p>
+        <p><strong>Registrado:</strong> ${new Date(producto.fecha_registro).toLocaleDateString()}</p>
+    `;
+    modal.style.display = 'flex';
+    skuInput.value = '';
 }
 
-function resetFormFields() {
-    altoInput.value = '';
-    anchoInput.value = '';
-    largoInput.value = '';
-    document.querySelectorAll('.pack-option').forEach(b => b.classList.remove('active'));
-}
-
-// Mostrar mensaje de estado
-function showStatus(message, type) {
-    const statusDiv = document.getElementById('scannerStatus');
-    statusDiv.textContent = message;
-    statusDiv.className = `status-message ${type}`;
-    if (message && type !== 'error') {
+function showStatus(msg, type) {
+    statusDiv.innerHTML = msg;
+    statusDiv.className = `status ${type}`;
+    if (msg && type !== 'error') {
         setTimeout(() => {
-            if (statusDiv.textContent === message) {
-                statusDiv.textContent = '';
-                statusDiv.className = 'status-message';
+            if (statusDiv.innerHTML === msg) {
+                statusDiv.innerHTML = '';
+                statusDiv.className = 'status';
             }
         }, 3000);
     }
 }
 
-// Mostrar/ocultar loading
-function showLoading(show) {
-    loadingOverlay.style.display = show ? 'flex' : 'none';
+function resetForm() {
+    document.getElementById('alto').value = '';
+    document.getElementById('ancho').value = '';
+    document.getElementById('largo').value = '';
+    document.querySelectorAll('.packBtn').forEach(b => b.classList.remove('active'));
+    selectedPack = null;
+    currentSku = null;
 }
 
-// Cerrar alerta
-window.closeAlert = function() {
-    existingAlert.style.display = 'none';
-    barcodeInput.focus();
+window.closeModal = () => {
+    document.getElementById('alertModal').style.display = 'none';
+    skuInput.focus();
 };
 
-// Inicializar
-barcodeInput.focus();
-
-// Soporte para escáner de código de barras físico
-let barcodeBuffer = '';
-let lastKeyTime = 0;
-
-document.addEventListener('keydown', (e) => {
-    // Detectar entrada de escáner de barras (generalmente rápida)
-    const now = Date.now();
-    if (now - lastKeyTime > 100) {
-        // Si hay pausa larga, reiniciar buffer (probablemente tecleo manual)
-        if (barcodeBuffer.length > 0) {
-            barcodeBuffer = '';
-        }
-    }
-    
-    if (e.key === 'Enter') {
-        if (barcodeBuffer.length > 0) {
-            e.preventDefault();
-            barcodeInput.value = barcodeBuffer;
-            barcodeBuffer = '';
-            handleScan();
-        }
-    } else if (e.key.length === 1) {
-        barcodeBuffer += e.key;
-    }
-    
-    lastKeyTime = now;
-});
+skuInput.focus();
