@@ -1,5 +1,6 @@
 const API_URL = window.location.origin + '/api';
 let currentSku = null;
+let currentArticulo = null;
 let selectedPack = null;
 let scannerActive = false;
 
@@ -11,6 +12,7 @@ const cameraContainer = document.getElementById('cameraContainer');
 const closeCameraBtn = document.getElementById('closeCameraBtn');
 const formContainer = document.getElementById('formContainer');
 const displaySku = document.getElementById('displaySku');
+const displayArticulo = document.getElementById('displayArticulo');
 const saveBtn = document.getElementById('saveBtn');
 const cancelBtn = document.getElementById('cancelBtn');
 const statusDiv = document.getElementById('status');
@@ -35,13 +37,12 @@ closeCameraBtn.onclick = () => {
     detenerCamara();
 };
 
-// Iniciar cámara con Quagga (especializado en códigos de barras)
+// Iniciar cámara con Quagga
 async function iniciarCamara() {
     try {
         cameraContainer.style.display = 'block';
         scannerActive = true;
         
-        // Configuración de Quagga
         Quagga.init({
             inputStream: {
                 name: "Live",
@@ -88,13 +89,11 @@ async function iniciarCamara() {
             
             Quagga.start();
             
-            // Detectar códigos
             Quagga.onDetected(function(result) {
                 if (!scannerActive) return;
                 
                 const code = result.codeResult.code;
                 if (code && code.length > 0) {
-                    // Validar que el código tenga formato válido
                     const codigoValido = /^[A-Z0-9\-]+$/.test(code);
                     
                     if (codigoValido && code.length >= 4 && code.length <= 20) {
@@ -104,7 +103,6 @@ async function iniciarCamara() {
                         verificarSku(code);
                     } else {
                         showStatus('⚠️ Escanea solo el código de barras', 'error');
-                        // No detener la cámara, seguir escaneando
                     }
                 }
             });
@@ -132,98 +130,89 @@ function detenerCamara() {
     cameraContainer.style.display = 'none';
 }
 
-// Verificar código con el backend (primero en artículos, luego en productos)
+// Verificar código con el backend
 async function verificarSku(sku) {
-    showStatus('Buscando artículo...', '');
+    showStatus('Buscando...', '');
     
     try {
-        // Primero buscar en la tabla de artículos
+        // 1. Buscar el artículo en la tabla de artículos
         const resArticulo = await fetch(`${API_URL}/articulo/${encodeURIComponent(sku)}`);
         const dataArticulo = await resArticulo.json();
         
-        if (dataArticulo.exists) {
-            // Si existe el artículo, mostrarlo
-            mostrarArticuloEncontrado(dataArticulo.articulo);
-        } else {
-            // Si no existe en artículos, buscar en productos (medidas)
-            const resProducto = await fetch(`${API_URL}/producto/${encodeURIComponent(sku)}`);
-            const dataProducto = await resProducto.json();
-            
-            if (dataProducto.exists) {
-                showAlert(dataProducto.producto);
-            } else {
-                showStatus('Código no encontrado en el inventario', 'error');
-                skuInput.value = '';
-                skuInput.focus();
-            }
+        if (!dataArticulo.exists) {
+            showStatus('Código no encontrado en el inventario', 'error');
+            skuInput.value = '';
+            skuInput.focus();
+            return;
         }
+        
+        // Guardar el artículo encontrado
+        currentArticulo = dataArticulo.articulo;
+        
+        // 2. Verificar si ya tiene medidas registradas
+        const resProducto = await fetch(`${API_URL}/producto/${encodeURIComponent(sku)}`);
+        const dataProducto = await resProducto.json();
+        
+        if (dataProducto.exists) {
+            // Ya tiene medidas, mostrar alerta
+            showAlert(dataProducto.producto);
+        } else {
+            // No tiene medidas, mostrar formulario con el artículo
+            showForm(sku, currentArticulo.articulo);
+        }
+        
     } catch (error) {
         console.error('Error:', error);
         showStatus('Error de conexión con el servidor', 'error');
     }
 }
 
-// Mostrar artículo encontrado con opción de registrar medidas
-function mostrarArticuloEncontrado(articulo) {
+// Mostrar formulario con SKU y Artículo
+function showForm(sku, articuloNombre) {
+    formContainer.style.display = 'block';
+    displaySku.textContent = sku;
+    displayArticulo.textContent = articuloNombre;
+    currentSku = sku;
+    statusDiv.innerHTML = '';
+    skuInput.value = '';
+    formContainer.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Mostrar alerta de producto ya registrado
+function showAlert(producto) {
     const modal = document.getElementById('alertModal');
     const details = document.getElementById('alertDetails');
+    const tipoTexto = { caja: '📦 Caja', bolsa: '🛍️ Bolsa', ninguno: '📦 Sin empaque' };
     
     details.innerHTML = `
-        <p><strong>📦 Artículo:</strong> ${articulo.articulo}</p>
-        <p><strong>📊 Disponible:</strong> ${articulo.disponible} unidades</p>
-        <p><strong>🔢 Código:</strong> ${articulo.codigo}</p>
-        <hr>
-        <p style="margin-top: 10px;"><strong>¿Deseas registrar las medidas de este producto?</strong></p>
+        <p><strong>📦 Artículo:</strong> ${currentArticulo?.articulo || producto.sku}</p>
+        <p><strong>📏 Medidas:</strong> ${producto.alto} x ${producto.ancho} x ${producto.largo} cm</p>
+        <p><strong>📦 Empaque:</strong> ${tipoTexto[producto.tipo_empaque] || producto.tipo_empaque}</p>
+        <p><strong>📅 Registrado:</strong> ${new Date(producto.fecha_registro).toLocaleDateString()}</p>
     `;
     
-    // Cambiar el botón para que muestre opciones
     const modalContent = document.querySelector('#alertModal .modal-content');
-    const oldButton = modalContent.querySelector('button');
+    const existingButtons = modalContent.querySelectorAll('button');
+    existingButtons.forEach(btn => btn.remove());
     
-    if (oldButton) {
-        oldButton.remove();
-    }
-    
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.gap = '10px';
-    buttonContainer.style.marginTop = '15px';
-    
-    const siBtn = document.createElement('button');
-    siBtn.textContent = '✅ Sí, registrar medidas';
-    siBtn.style.background = '#2EC4B6';
-    siBtn.style.flex = '1';
-    siBtn.style.padding = '12px';
-    siBtn.style.border = 'none';
-    siBtn.style.borderRadius = '12px';
-    siBtn.style.fontWeight = '600';
-    siBtn.style.cursor = 'pointer';
-    siBtn.onclick = () => {
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Aceptar';
+    closeBtn.style.background = 'linear-gradient(135deg, #FF6B35, #2EC4B6)';
+    closeBtn.style.padding = '12px';
+    closeBtn.style.border = 'none';
+    closeBtn.style.borderRadius = '12px';
+    closeBtn.style.fontWeight = '600';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.style.marginTop = '15px';
+    closeBtn.style.width = '100%';
+    closeBtn.onclick = () => {
         document.getElementById('alertModal').style.display = 'none';
-        showForm(articulo.codigo);
-    };
-    
-    const noBtn = document.createElement('button');
-    noBtn.textContent = '❌ No, solo verificar';
-    noBtn.style.background = '#6c757d';
-    noBtn.style.flex = '1';
-    noBtn.style.padding = '12px';
-    noBtn.style.border = 'none';
-    noBtn.style.borderRadius = '12px';
-    noBtn.style.fontWeight = '600';
-    noBtn.style.cursor = 'pointer';
-    noBtn.style.color = 'white';
-    noBtn.onclick = () => {
-        document.getElementById('alertModal').style.display = 'none';
-        showStatus('Artículo verificado', 'success');
         skuInput.value = '';
         skuInput.focus();
+        currentArticulo = null;
     };
     
-    buttonContainer.appendChild(siBtn);
-    buttonContainer.appendChild(noBtn);
-    modalContent.appendChild(buttonContainer);
-    
+    modalContent.appendChild(closeBtn);
     document.getElementById('alertModal').style.display = 'flex';
     skuInput.value = '';
 }
@@ -256,13 +245,14 @@ saveBtn.onclick = async () => {
         });
         
         if (res.ok) {
-            showStatus('✅ Producto guardado!', 'success');
+            showStatus('✅ Medidas registradas correctamente!', 'success');
             setTimeout(() => {
                 formContainer.style.display = 'none';
                 skuInput.value = '';
                 skuInput.focus();
                 resetForm();
-            }, 1500);
+                currentArticulo = null;
+            }, 2000);
         } else {
             const error = await res.json();
             showStatus(error.error || 'Error al guardar', 'error');
@@ -278,6 +268,7 @@ cancelBtn.onclick = () => {
     skuInput.value = '';
     skuInput.focus();
     resetForm();
+    currentArticulo = null;
 };
 
 // Selección de tipo de empaque
@@ -288,52 +279,6 @@ document.querySelectorAll('.packBtn').forEach(btn => {
         selectedPack = btn.dataset.pack;
     };
 });
-
-function showForm(sku) {
-    formContainer.style.display = 'block';
-    displaySku.textContent = sku;
-    currentSku = sku;
-    statusDiv.innerHTML = '';
-    skuInput.value = '';
-    formContainer.scrollIntoView({ behavior: 'smooth' });
-}
-
-function showAlert(producto) {
-    const modal = document.getElementById('alertModal');
-    const details = document.getElementById('alertDetails');
-    const tipoTexto = { caja: '📦 Caja', bolsa: '🛍️ Bolsa', ninguno: '📦 Sin empaque' };
-    
-    details.innerHTML = `
-        <p><strong>SKU:</strong> ${producto.sku}</p>
-        <p><strong>Medidas:</strong> ${producto.alto} x ${producto.ancho} x ${producto.largo} cm</p>
-        <p><strong>Empaque:</strong> ${tipoTexto[producto.tipo_empaque] || producto.tipo_empaque}</p>
-        <p><strong>Registrado:</strong> ${new Date(producto.fecha_registro).toLocaleDateString()}</p>
-    `;
-    
-    // Asegurar que el modal tenga un solo botón
-    const modalContent = document.querySelector('#alertModal .modal-content');
-    const existingButtons = modalContent.querySelectorAll('button');
-    existingButtons.forEach(btn => btn.remove());
-    
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = 'Aceptar';
-    closeBtn.style.background = 'linear-gradient(135deg, #FF6B35, #2EC4B6)';
-    closeBtn.style.padding = '12px';
-    closeBtn.style.border = 'none';
-    closeBtn.style.borderRadius = '12px';
-    closeBtn.style.fontWeight = '600';
-    closeBtn.style.cursor = 'pointer';
-    closeBtn.style.marginTop = '15px';
-    closeBtn.style.width = '100%';
-    closeBtn.onclick = () => {
-        document.getElementById('alertModal').style.display = 'none';
-        skuInput.focus();
-    };
-    
-    modalContent.appendChild(closeBtn);
-    document.getElementById('alertModal').style.display = 'flex';
-    skuInput.value = '';
-}
 
 function showStatus(msg, type) {
     statusDiv.innerHTML = msg;
@@ -360,6 +305,7 @@ function resetForm() {
 window.closeModal = () => {
     document.getElementById('alertModal').style.display = 'none';
     skuInput.focus();
+    currentArticulo = null;
 };
 
 skuInput.focus();
