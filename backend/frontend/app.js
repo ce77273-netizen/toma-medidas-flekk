@@ -3,6 +3,9 @@ let currentSku = null;
 let currentArticulo = null;
 let selectedPack = null;
 let scanner = null;
+let barcodeBuffer = '';
+let barcodeTimer = null;
+let isHardwareScanner = false;
 
 // Elementos DOM
 const skuInput = document.getElementById('skuInput');
@@ -44,6 +47,83 @@ function validarCodigoBarras(code) {
     return true;
 }
 
+// Detectar lector de código de barras Honeywell / Zebra / Socket
+function detectarLectorHardware() {
+    const ua = navigator.userAgent;
+    
+    // Dispositivos con lector integrado
+    const dispositivosLector = [
+        'Honeywell', 'Zebra', 'Symbol', 'Motorola', 
+        'TC70', 'TC75', 'MC92', 'MC33', 'MC40', 'WT41',
+        'Socket', 'CS3070', 'DS6878', 'LS2208'
+    ];
+    
+    const tieneLector = dispositivosLector.some(device => ua.includes(device));
+    
+    if (tieneLector) {
+        isHardwareScanner = true;
+        showStatus('📟 Lector Honeywell/Zebra detectado. Usa el gatillo.', 'success');
+        return true;
+    }
+    
+    // Detectar si es un lector USB (prueba rápida)
+    if (!/Android|iPhone|iPad/i.test(ua)) {
+        isHardwareScanner = true;
+        showStatus('🖥️ Modo escritorio - puedes usar lector USB', 'success');
+        return true;
+    }
+    
+    isHardwareScanner = false;
+    showStatus('📱 Usando cámara para escanear', '');
+    return false;
+}
+
+// Configurar escucha para lectores Honeywell (simulan teclado)
+function configurarLectorHardware() {
+    let inputBuffer = '';
+    let lastKeyTime = 0;
+    
+    document.addEventListener('keydown', (e) => {
+        const now = Date.now();
+        
+        // Si es lector hardware o es un escaneo rápido
+        if (isHardwareScanner || (now - lastKeyTime < 50 && e.key !== 'Enter')) {
+            
+            if (e.key === 'Enter') {
+                if (inputBuffer.length >= 4) {
+                    const code = inputBuffer.trim();
+                    inputBuffer = '';
+                    
+                    if (validarCodigoBarras(code)) {
+                        playBeep();
+                        vibrate();
+                        skuInput.value = code;
+                        verificarSku(code);
+                    } else {
+                        showStatus('⚠️ Código no válido', 'error');
+                    }
+                } else {
+                    inputBuffer = '';
+                }
+                e.preventDefault();
+            } 
+            else if (e.key.length === 1 && /[A-Z0-9\-]/i.test(e.key)) {
+                inputBuffer += e.key.toUpperCase();
+                
+                // Timeout para limpiar buffer si es muy lento
+                clearTimeout(barcodeTimer);
+                barcodeTimer = setTimeout(() => {
+                    if (inputBuffer.length > 0 && inputBuffer.length < 4) {
+                        inputBuffer = '';
+                    }
+                }, 100);
+            }
+            
+            lastKeyTime = now;
+        }
+    });
+}
+
 // Verificar SKU manual
 scanBtn.onclick = async () => {
     const sku = skuInput.value.trim();
@@ -60,8 +140,12 @@ scanBtn.onclick = async () => {
     await verificarSku(sku);
 };
 
-// Abrir cámara con Instascan
+// Abrir cámara (solo si no hay lector hardware)
 scanCameraBtn.onclick = async () => {
+    if (isHardwareScanner) {
+        showStatus('📟 Usa el gatillo del lector Honeywell/Zebra', 'error');
+        return;
+    }
     await iniciarCamara();
 };
 
@@ -304,4 +388,7 @@ window.closeModal = () => {
     currentArticulo = null;
 };
 
+// Inicializar
+detectarLectorHardware();
+configurarLectorHardware();
 skuInput.focus();
