@@ -3,8 +3,8 @@ let currentSku = null;
 let currentArticulo = null;
 let selectedPack = null;
 let scannerActive = false;
-let lastCode = '';
-let lastCodeTime = 0;
+let lastValidCode = '';
+let lastValidTime = 0;
 
 // Elementos DOM
 const skuInput = document.getElementById('skuInput');
@@ -21,20 +21,17 @@ const statusDiv = document.getElementById('status');
 
 // Función para validar código de barras
 function validarCodigoBarras(code) {
-    // Eliminar espacios en blanco
     code = code.trim();
-    
-    // Verificar que no esté vacío
     if (!code) return false;
     
-    // Verificar formato: solo letras mayúsculas, números y guiones
+    // Formato: solo letras mayúsculas, números y guiones
     const formatoValido = /^[A-Z0-9\-]+$/.test(code);
     if (!formatoValido) return false;
     
-    // Verificar longitud: entre 4 y 20 caracteres
+    // Longitud entre 4 y 20 caracteres
     if (code.length < 4 || code.length > 20) return false;
     
-    // Lista negra de códigos comunes que son errores de escaneo
+    // Lista negra de códigos erróneos
     const codigosErrores = [
         '000000', '111111', '123456', '999999', '0000000000',
         '1111111111', '1234567890', '9999999999', '0000', '1111',
@@ -42,7 +39,7 @@ function validarCodigoBarras(code) {
     ];
     if (codigosErrores.includes(code)) return false;
     
-    // Verificar que tenga al menos una letra (no sea solo números)
+    // Debe tener al menos una letra
     const tieneLetra = /[A-Z]/.test(code);
     if (!tieneLetra) return false;
     
@@ -83,7 +80,6 @@ async function iniciarCamara() {
         cameraContainer.style.display = 'block';
         scannerActive = true;
         
-        // Configuración de Quagga
         Quagga.init({
             inputStream: {
                 name: "Live",
@@ -96,8 +92,14 @@ async function iniciarCamara() {
                 },
             },
             locator: {
-                patchSize: "medium",
-                halfSample: true
+                patchSize: "large",
+                halfSample: false,
+                debug: {
+                    drawBoundingBox: false,
+                    showFrequency: false,
+                    drawScanline: false,
+                    showPattern: false
+                }
             },
             numOfWorkers: navigator.hardwareConcurrency || 4,
             decoder: {
@@ -105,12 +107,7 @@ async function iniciarCamara() {
                     "code_128_reader",
                     "ean_reader",
                     "ean_8_reader",
-                    "code_39_reader",
-                    "code_93_reader",
-                    "codabar_reader",
-                    "upc_reader",
-                    "upc_e_reader",
-                    "i2of5_reader"
+                    "code_39_reader"
                 ],
                 debug: {
                     drawBoundingBox: false,
@@ -119,7 +116,8 @@ async function iniciarCamara() {
                     showPattern: false
                 }
             },
-            locate: true
+            locate: true,
+            frequency: 10
         }, function(err) {
             if (err) {
                 console.error("Error inicializando Quagga:", err);
@@ -130,50 +128,40 @@ async function iniciarCamara() {
             
             Quagga.start();
             
-            // Detectar códigos con validación mejorada
+            let detections = [];
+            
             Quagga.onDetected(function(result) {
                 if (!scannerActive) return;
                 
                 const code = result.codeResult.code;
+                const confidence = result.codeResult.confidence || 0;
                 const now = Date.now();
                 
-                if (code && code.length > 0) {
-                    // Validar formato del código
-                    const codigoValido = /^[A-Z0-9\-]+$/.test(code);
+                if (code && code.length > 0 && confidence > 0.6) {
+                    detections.push({ code, time: now, confidence });
+                    detections = detections.filter(d => now - d.time < 1000);
                     
-                    // Validar longitud
-                    const longitudValida = code.length >= 4 && code.length <= 20;
+                    const sameCodeDetections = detections.filter(d => d.code === code);
                     
-                    // Validar que no sea el mismo código repetido en menos de 2 segundos
-                    const noRepetido = (code !== lastCode) || (now - lastCodeTime > 2000);
-                    
-                    // Lista de códigos comunes que son errores
-                    const codigosErrores = ['000000', '111111', '123456', '999999', '0000000000', '1111111111'];
-                    const noEsError = !codigosErrores.includes(code);
-                    
-                    // Verificar que tenga al menos una letra
-                    const tieneLetra = /[A-Z]/.test(code);
-                    
-                    if (codigoValido && longitudValida && noRepetido && noEsError && tieneLetra) {
-                        lastCode = code;
-                        lastCodeTime = now;
-                        scannerActive = false;
-                        detenerCamara();
-                        skuInput.value = code;
-                        verificarSku(code);
-                    } else {
-                        // Mostrar mensaje solo si es un código que parece válido pero no pasa filtros
-                        if (code.length >= 4 && code.length <= 20 && !tieneLetra) {
-                            showStatus('⚠️ Código inválido (solo números). Escanea el código de barras correcto.', 'error');
-                        } else if (code.length > 0 && code.length < 20) {
-                            // No mostrar mensaje para lecturas muy cortas
+                    if (sameCodeDetections.length >= 2 && code !== lastValidCode) {
+                        const codigoValido = /^[A-Z0-9\-]+$/.test(code);
+                        const longitudValida = code.length >= 4 && code.length <= 20;
+                        const tieneLetra = /[A-Z]/.test(code);
+                        const noEsError = !['000000', '111111', '123456', '999999'].includes(code);
+                        
+                        if (codigoValido && longitudValida && tieneLetra && noEsError) {
+                            lastValidCode = code;
+                            lastValidTime = now;
+                            scannerActive = false;
+                            detenerCamara();
+                            skuInput.value = code;
+                            verificarSku(code);
                         }
-                        // No detener la cámara, seguir escaneando
                     }
                 }
             });
             
-            showStatus('Cámara activa. Apunta al código de barras principal.', '');
+            showStatus('Cámara activa. Apunta al código de barras.', '');
         });
         
     } catch (error) {
@@ -186,8 +174,6 @@ async function iniciarCamara() {
 // Detener cámara
 function detenerCamara() {
     scannerActive = false;
-    lastCode = '';
-    lastCodeTime = 0;
     
     if (Quagga) {
         try {
@@ -200,9 +186,8 @@ function detenerCamara() {
 
 // Verificar código con el backend
 async function verificarSku(sku) {
-    // Validar el código antes de buscar
     if (!validarCodigoBarras(sku)) {
-        showStatus('⚠️ Código de barras no válido. Escanea nuevamente.', 'error');
+        showStatus('⚠️ Código no válido. Escanea nuevamente.', 'error');
         skuInput.value = '';
         skuInput.focus();
         return;
@@ -211,30 +196,30 @@ async function verificarSku(sku) {
     showStatus('Buscando...', '');
     
     try {
-        // 1. Buscar el artículo en la tabla de artículos
+        // Buscar en tabla de artículos
         const resArticulo = await fetch(`${API_URL}/articulo/${encodeURIComponent(sku)}`);
         const dataArticulo = await resArticulo.json();
         
-        if (!dataArticulo.exists) {
-            showStatus('Código no encontrado en el inventario', 'error');
-            skuInput.value = '';
-            skuInput.focus();
-            return;
+        if (dataArticulo.exists) {
+            currentArticulo = dataArticulo.articulo;
+        } else {
+            // Si no existe, crear objeto temporal
+            currentArticulo = {
+                codigo: sku,
+                articulo: `📦 Producto: ${sku}`,
+                disponible: 0
+            };
         }
         
-        // Guardar el artículo encontrado
-        currentArticulo = dataArticulo.articulo;
-        
-        // 2. Verificar si ya tiene medidas registradas
+        // Verificar si ya tiene medidas
         const resProducto = await fetch(`${API_URL}/producto/${encodeURIComponent(sku)}`);
         const dataProducto = await resProducto.json();
         
         if (dataProducto.exists) {
-            // Ya tiene medidas, mostrar alerta
             showAlert(dataProducto.producto);
         } else {
-            // No tiene medidas, mostrar formulario con el artículo
-            showForm(sku, currentArticulo.articulo);
+            const nombreArticulo = dataArticulo.exists ? currentArticulo.articulo : `📦 Producto: ${sku}`;
+            showForm(sku, nombreArticulo);
         }
         
     } catch (error) {
@@ -243,7 +228,7 @@ async function verificarSku(sku) {
     }
 }
 
-// Mostrar formulario con SKU y Artículo
+// Mostrar formulario
 function showForm(sku, articuloNombre) {
     formContainer.style.display = 'block';
     displaySku.textContent = sku;
@@ -293,7 +278,7 @@ function showAlert(producto) {
     skuInput.value = '';
 }
 
-// Guardar producto (medidas)
+// Guardar producto
 saveBtn.onclick = async () => {
     const alto = parseFloat(document.getElementById('alto').value);
     const ancho = parseFloat(document.getElementById('ancho').value);
