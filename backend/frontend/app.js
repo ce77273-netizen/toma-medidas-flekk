@@ -47,7 +47,7 @@ function validarCodigoBarras(code) {
     return true;
 }
 
-// Detectar lector de código de barras Honeywell / Zebra / Socket
+// Detectar lector hardware
 function detectarLectorHardware() {
     const ua = navigator.userAgent;
     
@@ -66,7 +66,6 @@ function detectarLectorHardware() {
         return true;
     }
     
-    // Detectar si es PC con posible lector USB
     if (!/Android|iPhone|iPad|iPod/i.test(ua)) {
         isHardwareScanner = true;
         showStatus('🖥️ Modo escritorio - puedes usar lector USB o cámara', 'success');
@@ -80,7 +79,7 @@ function detectarLectorHardware() {
     return false;
 }
 
-// Configurar escucha para lectores Honeywell
+// Configurar escucha para lectores hardware
 function configurarLectorHardware() {
     let inputBuffer = '';
     let lastKeyTime = 0;
@@ -153,19 +152,26 @@ closeCameraBtn.onclick = () => {
     detenerCamara();
 };
 
-// Iniciar cámara con Instascan
+// Iniciar cámara
 async function iniciarCamara() {
-    // Verificar si existe la librería Instascan
+    // Verificar si la librería está cargada
     if (typeof Instascan === 'undefined') {
-        showStatus('Error: Librería de escáner no cargada. Recarga la página.', 'error');
-        console.error('Instascan no está cargado');
+        showStatus('Cargando escáner... Espera un momento y vuelve a intentar.', 'error');
+        console.error('Instascan no cargado');
+        
+        // Intentar recargar la librería
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/instascan@1.0.0/instascan.min.js';
+        script.onload = () => {
+            showStatus('Escáner cargado. Vuelve a intentar.', 'success');
+        };
+        document.head.appendChild(script);
         return;
     }
     
     try {
         cameraContainer.style.display = 'block';
         
-        // Verificar soporte de cámara
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             showStatus('Tu navegador no soporta cámara. Usa ingreso manual.', 'error');
             detenerCamara();
@@ -205,12 +211,10 @@ async function iniciarCamara() {
             return;
         }
         
-        // Buscar cámara trasera
         let backCamera = cameras.find(camera => 
             camera.name.toLowerCase().includes('back') ||
             camera.name.toLowerCase().includes('environment') ||
-            camera.name.toLowerCase().includes('rear') ||
-            camera.name.toLowerCase().includes('trasera')
+            camera.name.toLowerCase().includes('rear')
         );
         
         if (!backCamera) {
@@ -221,14 +225,12 @@ async function iniciarCamara() {
         showStatus('📷 Cámara activa. Apunta al código de barras.', 'success');
         
     } catch (error) {
-        console.error('Error detallado:', error);
+        console.error('Error:', error);
         
         if (error.name === 'NotAllowedError') {
             showStatus('🔒 Permiso de cámara denegado. Habilita la cámara en la configuración.', 'error');
         } else if (error.name === 'NotFoundError') {
             showStatus('📷 No se encontró cámara en este dispositivo.', 'error');
-        } else if (error.name === 'NotReadableError') {
-            showStatus('📷 La cámara está siendo usada por otra aplicación.', 'error');
         } else {
             showStatus('Error al acceder a la cámara: ' + error.message, 'error');
         }
@@ -241,9 +243,7 @@ function detenerCamara() {
     if (scanner) {
         try {
             scanner.stop();
-        } catch(e) {
-            console.log('Error al detener scanner:', e);
-        }
+        } catch(e) {}
         scanner = null;
     }
     cameraContainer.style.display = 'none';
