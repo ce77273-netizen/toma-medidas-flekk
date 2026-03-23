@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { Pool } = require('pg');
 
 const app = express();
@@ -9,7 +10,9 @@ const port = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+
+// Servir archivos estáticos del frontend
+app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Configuración de PostgreSQL
 const pool = new Pool({
@@ -18,18 +21,14 @@ const pool = new Pool({
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
 });
 
 // Verificar conexión a la base de datos
-pool.connect((err, client, release) => {
+pool.connect((err) => {
     if (err) {
-        console.error('Error conectando a PostgreSQL:', err.stack);
+        console.error('❌ Error conectando a PostgreSQL:', err.message);
     } else {
         console.log('✅ Conectado a PostgreSQL correctamente');
-        release();
     }
 });
 
@@ -51,15 +50,9 @@ app.get('/api/producto/:sku', async (req, res) => {
         );
         
         if (result.rows.length > 0) {
-            res.json({
-                exists: true,
-                producto: result.rows[0]
-            });
+            res.json({ exists: true, producto: result.rows[0] });
         } else {
-            res.json({
-                exists: false,
-                message: 'Producto no encontrado'
-            });
+            res.json({ exists: false });
         }
     } catch (error) {
         console.error('Error al buscar producto:', error);
@@ -71,7 +64,6 @@ app.get('/api/producto/:sku', async (req, res) => {
 app.post('/api/productos', async (req, res) => {
     const { sku, alto, ancho, largo, tipo_empaque } = req.body;
     
-    // Validaciones
     if (!sku || !alto || !ancho || !largo || !tipo_empaque) {
         return res.status(400).json({ error: 'Todos los campos son requeridos' });
     }
@@ -80,22 +72,7 @@ app.post('/api/productos', async (req, res) => {
         return res.status(400).json({ error: 'Las medidas deben ser mayores a 0' });
     }
     
-    if (!['caja', 'bolsa', 'ninguno'].includes(tipo_empaque)) {
-        return res.status(400).json({ error: 'Tipo de empaque no válido' });
-    }
-    
     try {
-        // Verificar si ya existe
-        const existing = await pool.query(
-            'SELECT sku FROM productos WHERE sku = $1',
-            [sku]
-        );
-        
-        if (existing.rows.length > 0) {
-            return res.status(409).json({ error: 'El SKU ya existe en el sistema' });
-        }
-        
-        // Insertar nuevo producto
         const result = await pool.query(
             `INSERT INTO productos (sku, alto, ancho, largo, tipo_empaque) 
              VALUES ($1, $2, $3, $4, $5) 
@@ -108,12 +85,16 @@ app.post('/api/productos', async (req, res) => {
             producto: result.rows[0]
         });
     } catch (error) {
-        console.error('Error al registrar producto:', error);
-        res.status(500).json({ error: 'Error en el servidor' });
+        if (error.code === '23505') {
+            res.status(409).json({ error: 'El SKU ya existe' });
+        } else {
+            console.error('Error al registrar:', error);
+            res.status(500).json({ error: 'Error en el servidor' });
+        }
     }
 });
 
-// Obtener todos los productos (para administración)
+// Obtener todos los productos
 app.get('/api/productos', async (req, res) => {
     try {
         const result = await pool.query(
@@ -121,27 +102,14 @@ app.get('/api/productos', async (req, res) => {
         );
         res.json(result.rows);
     } catch (error) {
-        console.error('Error al obtener productos:', error);
+        console.error('Error:', error);
         res.status(500).json({ error: 'Error en el servidor' });
     }
 });
 
-// Obtener estadísticas
-app.get('/api/estadisticas', async (req, res) => {
-    try {
-        const total = await pool.query('SELECT COUNT(*) FROM productos');
-        const porEmpaque = await pool.query(
-            'SELECT tipo_empaque, COUNT(*) FROM productos GROUP BY tipo_empaque'
-        );
-        
-        res.json({
-            total_productos: parseInt(total.rows[0].count),
-            distribucion_empaques: porEmpaque.rows
-        });
-    } catch (error) {
-        console.error('Error al obtener estadísticas:', error);
-        res.status(500).json({ error: 'Error en el servidor' });
-    }
+// Para cualquier otra ruta, servir index.html (SPA)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
 // Iniciar servidor
