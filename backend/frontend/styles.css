@@ -275,7 +275,7 @@ button {
     box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
 }
 
-/* Contenedor del escáner con guía visual */
+/* Contenedor del escáner con guía visual FIJA */
 #scanner-container {
     position: relative;
     width: 100%;
@@ -296,18 +296,6 @@ button {
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
     pointer-events: none;
     z-index: 10;
-    animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        border-color: #FF6B35;
-        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-    }
-    50% {
-        border-color: #FF9F1C;
-        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
-    }
 }
 
 #scanner-container video {
