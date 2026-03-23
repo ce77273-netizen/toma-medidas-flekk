@@ -3,8 +3,8 @@ let currentSku = null;
 let currentArticulo = null;
 let selectedPack = null;
 let scannerActive = false;
-let lastValidCode = '';
-let lastValidTime = 0;
+let lastAcceptedCode = '';
+let lastAcceptedTime = 0;
 
 // Elementos DOM
 const skuInput = document.getElementById('skuInput');
@@ -19,10 +19,13 @@ const saveBtn = document.getElementById('saveBtn');
 const cancelBtn = document.getElementById('cancelBtn');
 const statusDiv = document.getElementById('status');
 
-// Función para validar código de barras
+// Función para validar código de barras (rechaza QR)
 function validarCodigoBarras(code) {
     code = code.trim();
     if (!code) return false;
+    
+    // Rechazar códigos muy largos (los QR suelen ser largos)
+    if (code.length > 25) return false;
     
     // Formato: solo letras mayúsculas, números y guiones
     const formatoValido = /^[A-Z0-9\-]+$/.test(code);
@@ -39,7 +42,7 @@ function validarCodigoBarras(code) {
     ];
     if (codigosErrores.includes(code)) return false;
     
-    // Debe tener al menos una letra
+    // Debe tener al menos una letra (los códigos de barras válidos tienen letras)
     const tieneLetra = /[A-Z]/.test(code);
     if (!tieneLetra) return false;
     
@@ -74,7 +77,7 @@ closeCameraBtn.onclick = () => {
     detenerCamara();
 };
 
-// Iniciar cámara con Quagga (versión mejorada)
+// Iniciar cámara con Quagga - Solo códigos de barras lineales
 async function iniciarCamara() {
     try {
         cameraContainer.style.display = 'block';
@@ -92,7 +95,7 @@ async function iniciarCamara() {
                 },
             },
             locator: {
-                patchSize: "large",
+                patchSize: "x-large",
                 halfSample: false,
                 debug: {
                     drawBoundingBox: false,
@@ -107,7 +110,11 @@ async function iniciarCamara() {
                     "code_128_reader",
                     "ean_reader",
                     "ean_8_reader",
-                    "code_39_reader"
+                    "code_39_reader",
+                    "code_93_reader",
+                    "codabar_reader",
+                    "upc_reader",
+                    "upc_e_reader"
                 ],
                 debug: {
                     drawBoundingBox: false,
@@ -117,7 +124,7 @@ async function iniciarCamara() {
                 }
             },
             locate: true,
-            frequency: 10
+            frequency: 15
         }, function(err) {
             if (err) {
                 console.error("Error inicializando Quagga:", err);
@@ -135,23 +142,26 @@ async function iniciarCamara() {
                 
                 const code = result.codeResult.code;
                 const confidence = result.codeResult.confidence || 0;
+                const format = result.codeResult.format || '';
                 const now = Date.now();
                 
-                if (code && code.length > 0 && confidence > 0.6) {
+                // Solo procesar si es un código de barras (no QR)
+                const isBarcode = format !== 'qr_code' && format !== 'qr' && format !== 'pdf417';
+                
+                if (code && code.length > 0 && confidence > 0.5 && isBarcode) {
                     detections.push({ code, time: now, confidence });
-                    detections = detections.filter(d => now - d.time < 1000);
+                    detections = detections.filter(d => now - d.time < 800);
                     
                     const sameCodeDetections = detections.filter(d => d.code === code);
                     
-                    if (sameCodeDetections.length >= 2 && code !== lastValidCode) {
+                    if (sameCodeDetections.length >= 3 && code !== lastAcceptedCode) {
                         const codigoValido = /^[A-Z0-9\-]+$/.test(code);
                         const longitudValida = code.length >= 4 && code.length <= 20;
                         const tieneLetra = /[A-Z]/.test(code);
-                        const noEsError = !['000000', '111111', '123456', '999999'].includes(code);
                         
-                        if (codigoValido && longitudValida && tieneLetra && noEsError) {
-                            lastValidCode = code;
-                            lastValidTime = now;
+                        if (codigoValido && longitudValida && tieneLetra) {
+                            lastAcceptedCode = code;
+                            lastAcceptedTime = now;
                             scannerActive = false;
                             detenerCamara();
                             skuInput.value = code;
@@ -161,7 +171,7 @@ async function iniciarCamara() {
                 }
             });
             
-            showStatus('Cámara activa. Apunta al código de barras.', '');
+            showStatus('Cámara activa. Enfoca el código de barras (ignora QR).', '');
         });
         
     } catch (error) {
@@ -174,6 +184,7 @@ async function iniciarCamara() {
 // Detener cámara
 function detenerCamara() {
     scannerActive = false;
+    lastAcceptedCode = '';
     
     if (Quagga) {
         try {
@@ -196,14 +207,12 @@ async function verificarSku(sku) {
     showStatus('Buscando...', '');
     
     try {
-        // Buscar en tabla de artículos
         const resArticulo = await fetch(`${API_URL}/articulo/${encodeURIComponent(sku)}`);
         const dataArticulo = await resArticulo.json();
         
         if (dataArticulo.exists) {
             currentArticulo = dataArticulo.articulo;
         } else {
-            // Si no existe, crear objeto temporal
             currentArticulo = {
                 codigo: sku,
                 articulo: `📦 Producto: ${sku}`,
@@ -211,7 +220,6 @@ async function verificarSku(sku) {
             };
         }
         
-        // Verificar si ya tiene medidas
         const resProducto = await fetch(`${API_URL}/producto/${encodeURIComponent(sku)}`);
         const dataProducto = await resProducto.json();
         
@@ -239,7 +247,7 @@ function showForm(sku, articuloNombre) {
     formContainer.scrollIntoView({ behavior: 'smooth' });
 }
 
-// Mostrar alerta de producto ya registrado
+// Mostrar alerta
 function showAlert(producto) {
     const modal = document.getElementById('alertModal');
     const details = document.getElementById('alertDetails');
