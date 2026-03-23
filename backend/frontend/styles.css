@@ -275,20 +275,6 @@ button {
     box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
 }
 
-/* Contenedor del escáner - sin recuadro, solo video */
-#scanner-container {
-    position: relative;
-    width: 100%;
-    border-radius: 16px;
-    overflow: hidden;
-}
-
-#scanner-container video {
-    width: 100%;
-    border-radius: 16px;
-    background: #000;
-}
-
 .camera-controls {
     margin-top: 1rem;
 }
@@ -450,7 +436,7 @@ button {
     }
 }
 
-/* ============== HTML5-QRCODE (respaldo) ============== */
+/* ============== HTML5-QRCODE ============== */
 #reader {
     width: 100%;
     max-width: 500px;
@@ -467,3 +453,21 @@ button {
 #reader__scan_region {
     min-height: 300px;
 }
+
+/* ============== GUÍA VISUAL OPCIONAL ============== */
+/* Puedes descomentar esto si quieres un recuadro de guía */
+/*
+#reader::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    height: 30%;
+    border: 2px dashed #FF6B35;
+    border-radius: 12px;
+    pointer-events: none;
+    z-index: 10;
+}
+*/
