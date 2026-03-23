@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Toma de Medidas Flekk</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📦 Toma de Medidas Flekk</h1>
+            <p>Escanea el código de barras y registra las medidas</p>
+        </div>
+
+        <div class="scanner-card">
+            <div class="input-group">
+                <input type="text" id="skuInput" placeholder="Escanea o ingresa el SKU" autofocus>
+                <button id="scanCameraBtn" class="btn-camera">📷 Escanear</button>
+            </div>
+            <button id="scanBtn">🔍 Verificar</button>
+            <div id="status"></div>
+        </div>
+
+        <!-- Visor de cámara para escanear -->
+        <div id="cameraContainer" class="camera-container" style="display:none;">
+            <div class="camera-card">
+                <div id="scanner-container" style="width: 100%; position: relative;">
+                    <video id="scanner-video" autoplay playsinline style="width: 100%; border-radius: 16px;"></video>
+                    <canvas id="scanner-canvas" style="display: none;"></canvas>
+                </div>
+                <div class="camera-controls">
+                    <button id="closeCameraBtn">❌ Cancelar</button>
+                </div>
+                <p class="camera-hint">Apunta al código de barras</p>
+            </div>
+        </div>
+
+        <div id="formContainer" style="display:none;">
+            <div class="form-card">
+                <h3>Registrar Producto</h3>
+                <p>SKU: <strong id="displaySku"></strong></p>
+                
+                <div class="dimensions">
+                    <input type="number" id="alto" placeholder="Alto (cm)" step="0.01">
+                    <input type="number" id="ancho" placeholder="Ancho (cm)" step="0.01">
+                    <input type="number" id="largo" placeholder="Largo (cm)" step="0.01">
+                </div>
+                
+                <div class="packaging">
+                    <button class="packBtn" data-pack="caja">📦 Caja</button>
+                    <button class="packBtn" data-pack="bolsa">🛍️ Bolsa</button>
+                    <button class="packBtn" data-pack="ninguno">📦 Sin empaque</button>
+                </div>
+                
+                <button id="saveBtn">💾 Guardar</button>
+                <button id="cancelBtn">❌ Cancelar</button>
+            </div>
+        </div>
+
+        <div id="alertModal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <h3>⚠️ Producto ya registrado</h3>
+                <div id="alertDetails"></div>
+                <button onclick="closeModal()">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Librería de escaneo robusta -->
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
+    <script src="https://unpkg.com/@ericblade/quagga2@1.8.2/dist/quagga.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

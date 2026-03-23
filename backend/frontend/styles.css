@@ -1,0 +1,414 @@
+:root {
+    --primary: #FF6B35;
+    --primary-dark: #E85A24;
+    --secondary: #2EC4B6;
+    --success: #2EC4B6;
+    --warning: #FF9F1C;
+    --danger: #E71D36;
+    --dark: #011627;
+    --light: #FDFFFC;
+    --gray: #6c757d;
+    --glass-bg: rgba(255, 255, 255, 0.98);
+    --shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    --border-radius: 20px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+    position: relative;
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text x="50" y="50" font-size="40" text-anchor="middle" fill="rgba(255,255,255,0.03)">📦</text></svg>') repeat;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+    animation: fadeInUp 0.6s ease-out;
+}
+
+/* Header Styles */
+.header {
+    text-align: center;
+    margin-bottom: 2rem;
+    animation: slideDown 0.5s ease-out;
+}
+
+.header h1 {
+    color: white;
+    font-size: 2rem;
+    font-weight: 700;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    letter-spacing: -0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.header p {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.9rem;
+}
+
+/* Cards */
+.scanner-card, .form-card {
+    background: white;
+    border-radius: 24px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.scanner-card:hover, .form-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.15);
+}
+
+/* Input Group */
+.input-group {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+#skuInput {
+    flex: 1;
+    padding: 1rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 16px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    font-family: 'Inter', monospace;
+}
+
+#skuInput:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+}
+
+/* Botones */
+button {
+    padding: 1rem;
+    border: none;
+    border-radius: 16px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#scanBtn, #scanCameraBtn {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+}
+
+.btn-camera {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    width: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: center;
+}
+
+#scanBtn:hover, #scanCameraBtn:hover, .btn-camera:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+}
+
+#saveBtn {
+    background: linear-gradient(135deg, var(--success), #219B8A);
+    color: white;
+    flex: 1;
+}
+
+#cancelBtn {
+    background: var(--gray);
+    color: white;
+    flex: 1;
+}
+
+#saveBtn:hover, #cancelBtn:hover {
+    transform: scale(1.02);
+}
+
+/* Dimensions */
+.dimensions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.dimensions input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: 1rem;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.dimensions input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+/* Packaging Options */
+.packaging {
+    display: flex;
+    gap: 1rem;
+    margin: 1.5rem 0;
+    flex-wrap: wrap;
+}
+
+.packBtn {
+    flex: 1;
+    background: #f0f0f0;
+    color: #333;
+    border: 2px solid #e0e0e0;
+    border-radius: 16px;
+    padding: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.packBtn.active {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: white;
+    border-color: transparent;
+    transform: scale(1.02);
+}
+
+/* Camera Scanner Styles */
+.camera-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.camera-card {
+    background: white;
+    border-radius: 24px;
+    padding: 1.5rem;
+    width: 90%;
+    max-width: 500px;
+    text-align: center;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+}
+
+.camera-card video {
+    width: 100%;
+    border-radius: 16px;
+    background: #000;
+    margin-bottom: 1rem;
+}
+
+.camera-controls {
+    margin-top: 1rem;
+}
+
+.camera-controls button {
+    background: var(--danger);
+    color: white;
+    width: 100%;
+}
+
+.camera-hint {
+    margin-top: 0.75rem;
+    color: var(--gray);
+    font-size: 0.85rem;
+}
+
+/* Modal Alert */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1500;
+    animation: fadeIn 0.3s ease;
+}
+
+.modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 24px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content h3 {
+    color: var(--danger);
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+}
+
+.modal-content button {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: white;
+    margin-top: 1rem;
+    width: 100%;
+}
+
+#alertDetails {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 12px;
+    margin: 1rem 0;
+    text-align: left;
+}
+
+#alertDetails p {
+    margin: 0.5rem 0;
+}
+
+/* Status Message */
+.status {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    text-align: center;
+    animation: fadeInUp 0.3s ease;
+}
+
+.status.error {
+    background: #fee;
+    color: var(--danger);
+    border-left: 4px solid var(--danger);
+}
+
+.status.success {
+    background: #e8f5e9;
+    color: var(--success);
+    border-left: 4px solid var(--success);
+}
+
+/* Animations */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    body {
+        padding: 10px;
+    }
+    
+    .scanner-card, .form-card {
+        padding: 1.5rem;
+    }
+    
+    .dimensions {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+    
+    .packaging {
+        flex-direction: column;
+    }
+    
+    .input-group {
+        flex-direction: column;
+    }
+    
+    .btn-camera {
+        width: 100%;
+    }
+    
+    .camera-card {
+        padding: 1rem;
+        width: 95%;
+    }
+    
+    .modal-content {
+        padding: 1.5rem;
+        width: 95%;
+    }
+}
+/* Estilos para html5-qrcode */
+#reader {
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+#reader video {
+    width: 100%;
+    border-radius: 16px;
+}
+
+#reader__scan_region {
+    min-height: 300px;
+}
