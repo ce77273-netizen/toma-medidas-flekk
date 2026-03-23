@@ -4,6 +4,9 @@ let currentArticulo = null;
 let selectedPack = null;
 let html5QrCode = null;
 let scannerActive = false;
+let barcodeBuffer = '';
+let barcodeTimer = null;
+let isBarcodeScanner = false;
 
 // Elementos DOM
 const skuInput = document.getElementById('skuInput');
@@ -18,12 +21,11 @@ const saveBtn = document.getElementById('saveBtn');
 const cancelBtn = document.getElementById('cancelBtn');
 const statusDiv = document.getElementById('status');
 
-// Crear sonido de escaneo
+// Sonido de escaneo
 const scanSound = new Audio();
 scanSound.src = 'https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3';
 scanSound.volume = 0.7;
 
-// Función para reproducir sonido
 function playBeep() {
     try {
         scanSound.currentTime = 0;
@@ -31,34 +33,89 @@ function playBeep() {
     } catch(e) {}
 }
 
-// Función para vibrar (si está disponible)
 function vibrate() {
     if (navigator.vibrate) {
         navigator.vibrate(200);
     }
 }
 
-// Función para validar código de barras
 function validarCodigoBarras(code) {
     code = code.trim();
     if (!code) return false;
-    
-    // Formato: solo letras mayúsculas, números y guiones
     const formatoValido = /^[A-Z0-9\-]+$/.test(code);
     if (!formatoValido) return false;
-    
-    // Longitud entre 4 y 20 caracteres
     if (code.length < 4 || code.length > 20) return false;
-    
-    // Lista negra
     const codigosErrores = ['000000', '111111', '123456', '999999'];
     if (codigosErrores.includes(code)) return false;
-    
-    // Debe tener al menos una letra
     const tieneLetra = /[A-Z]/.test(code);
     if (!tieneLetra) return false;
-    
     return true;
+}
+
+// Detectar si hay lector de código de barras integrado (Honeywell, Zebra, etc.)
+function detectarBarcodeScanner() {
+    // Verificar si es un dispositivo móvil sin lector integrado
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    // Dispositivos conocidos con lector integrado
+    const scannerDevices = /Honeywell|Zebra|Symbol|Motorola|TC70|TC75|MC92|MC33|MC40|WT41/i.test(navigator.userAgent);
+    
+    if (scannerDevices) {
+        isBarcodeScanner = true;
+        showStatus('📟 Lector de código de barras detectado. Usa el gatillo del dispositivo.', 'success');
+        return true;
+    }
+    
+    // En dispositivos móviles sin lector, usamos cámara
+    if (isMobile && !scannerDevices) {
+        isBarcodeScanner = false;
+        showStatus('📱 Usa la cámara para escanear', '');
+        return false;
+    }
+    
+    // En computadoras, puede ser lector USB
+    isBarcodeScanner = false;
+    return false;
+}
+
+// Configurar escucha de lectores USB (Honeywell, Zebra, etc.)
+function setupBarcodeListener() {
+    let inputBuffer = '';
+    let lastKeyTime = 0;
+    
+    document.addEventListener('keydown', (e) => {
+        const now = Date.now();
+        
+        // Si es un dispositivo con lector o es un lector USB (escaneo rápido)
+        if (isBarcodeScanner || (now - lastKeyTime < 50 && e.key !== 'Enter')) {
+            e.preventDefault();
+            
+            if (e.key === 'Enter') {
+                if (inputBuffer.length >= 4) {
+                    const code = inputBuffer.trim();
+                    inputBuffer = '';
+                    if (validarCodigoBarras(code)) {
+                        playBeep();
+                        vibrate();
+                        skuInput.value = code;
+                        verificarSku(code);
+                    } else {
+                        showStatus('⚠️ Código no válido', 'error');
+                    }
+                } else {
+                    inputBuffer = '';
+                }
+            } else if (e.key.length === 1 && /[A-Z0-9\-]/i.test(e.key)) {
+                inputBuffer += e.key.toUpperCase();
+                setTimeout(() => {
+                    if (inputBuffer.length > 0 && inputBuffer.length < 4) {
+                        inputBuffer = '';
+                    }
+                }, 100);
+            }
+            lastKeyTime = now;
+        }
+    });
 }
 
 // Verificar SKU manual
@@ -68,28 +125,29 @@ scanBtn.onclick = async () => {
         showStatus('Ingresa un SKU', 'error');
         return;
     }
-    
     if (!validarCodigoBarras(sku)) {
         showStatus('⚠️ Formato de código no válido', 'error');
         skuInput.value = '';
         skuInput.focus();
         return;
     }
-    
     await verificarSku(sku);
 };
 
-// Abrir cámara con html5-qrcode
+// Abrir cámara (solo para móviles sin lector)
 scanCameraBtn.onclick = async () => {
+    if (isBarcodeScanner) {
+        showStatus('📟 Este dispositivo tiene lector integrado. Usa el gatillo físico.', 'error');
+        return;
+    }
     await iniciarCamara();
 };
 
-// Cerrar cámara
 closeCameraBtn.onclick = () => {
     detenerCamara();
 };
 
-// Iniciar cámara con html5-qrcode (más confiable)
+// Iniciar cámara con html5-qrcode
 async function iniciarCamara() {
     try {
         cameraContainer.style.display = 'block';
@@ -98,7 +156,7 @@ async function iniciarCamara() {
         html5QrCode = new Html5Qrcode("reader");
         
         const config = {
-            fps: 15,
+            fps: 20,
             qrbox: { width: 280, height: 120 },
             aspectRatio: 1.0,
             formatsToSupport: [ 
@@ -116,7 +174,6 @@ async function iniciarCamara() {
             ]
         };
         
-        // Obtener cámara trasera
         const cameraId = await getBackCamera();
         
         await html5QrCode.start(
@@ -124,9 +181,7 @@ async function iniciarCamara() {
             config,
             (decodedText) => {
                 if (!scannerActive) return;
-                
                 const code = decodedText.trim();
-                
                 if (validarCodigoBarras(code)) {
                     scannerActive = false;
                     playBeep();
@@ -135,16 +190,15 @@ async function iniciarCamara() {
                     skuInput.value = code;
                     verificarSku(code);
                 } else {
-                    showStatus('⚠️ Código no válido, intenta nuevamente', 'error');
+                    showStatus('⚠️ Código no válido', 'error');
                     setTimeout(() => {
-                        if (statusDiv.innerHTML === '⚠️ Código no válido, intenta nuevamente') {
+                        if (statusDiv.innerHTML === '⚠️ Código no válido') {
                             statusDiv.innerHTML = '';
                         }
                     }, 1500);
                 }
             },
             (errorMessage) => {
-                // Error de escaneo, ignorar
                 console.log(errorMessage);
             }
         );
@@ -152,45 +206,34 @@ async function iniciarCamara() {
         showStatus('📷 Cámara activa. Apunta al código de barras.', '');
         
     } catch (error) {
-        console.error('Error al iniciar cámara:', error);
+        console.error('Error:', error);
         showStatus('Error al acceder a la cámara', 'error');
         detenerCamara();
     }
 }
 
-// Obtener cámara trasera
 async function getBackCamera() {
     try {
         const devices = await Html5Qrcode.getCameras();
-        
         if (!devices || devices.length === 0) {
             throw new Error('No se encontraron cámaras');
         }
-        
-        // Buscar cámara trasera
         let backCamera = devices.find(device => 
             device.label.toLowerCase().includes('back') ||
             device.label.toLowerCase().includes('environment') ||
             device.label.toLowerCase().includes('rear') ||
             device.label.toLowerCase().includes('trasera')
         );
-        
-        if (!backCamera) {
-            backCamera = devices[0];
-        }
-        
+        if (!backCamera) backCamera = devices[0];
         return backCamera.id;
-        
     } catch (error) {
-        console.error('Error obteniendo cámaras:', error);
+        console.error('Error:', error);
         throw error;
     }
 }
 
-// Detener cámara
 function detenerCamara() {
     scannerActive = false;
-    
     if (html5QrCode && html5QrCode.isScanning) {
         html5QrCode.stop().then(() => {
             html5QrCode.clear();
@@ -204,10 +247,8 @@ function detenerCamara() {
     html5QrCode = null;
 }
 
-// Verificar código con el backend
 async function verificarSku(sku) {
     showStatus('Buscando...', '');
-    
     try {
         const resArticulo = await fetch(`${API_URL}/articulo/${encodeURIComponent(sku)}`);
         const dataArticulo = await resArticulo.json();
@@ -215,11 +256,7 @@ async function verificarSku(sku) {
         if (dataArticulo.exists) {
             currentArticulo = dataArticulo.articulo;
         } else {
-            currentArticulo = {
-                codigo: sku,
-                articulo: `📦 Producto: ${sku}`,
-                disponible: 0
-            };
+            currentArticulo = { codigo: sku, articulo: `📦 Producto: ${sku}`, disponible: 0 };
         }
         
         const resProducto = await fetch(`${API_URL}/producto/${encodeURIComponent(sku)}`);
@@ -233,14 +270,12 @@ async function verificarSku(sku) {
             const nombreArticulo = dataArticulo.exists ? currentArticulo.articulo : `📦 Producto: ${sku}`;
             showForm(sku, nombreArticulo);
         }
-        
     } catch (error) {
         console.error('Error:', error);
         showStatus('Error de conexión con el servidor', 'error');
     }
 }
 
-// Mostrar formulario
 function showForm(sku, articuloNombre) {
     formContainer.style.display = 'block';
     displaySku.textContent = sku;
@@ -251,7 +286,6 @@ function showForm(sku, articuloNombre) {
     formContainer.scrollIntoView({ behavior: 'smooth' });
 }
 
-// Mostrar alerta
 function showAlert(producto) {
     const modal = document.getElementById('alertModal');
     const details = document.getElementById('alertDetails');
@@ -290,7 +324,6 @@ function showAlert(producto) {
     skuInput.value = '';
 }
 
-// Guardar producto
 saveBtn.onclick = async () => {
     const alto = parseFloat(document.getElementById('alto').value);
     const ancho = parseFloat(document.getElementById('ancho').value);
@@ -344,7 +377,6 @@ cancelBtn.onclick = () => {
     currentArticulo = null;
 };
 
-// Selección de tipo de empaque
 document.querySelectorAll('.packBtn').forEach(btn => {
     btn.onclick = () => {
         document.querySelectorAll('.packBtn').forEach(b => b.classList.remove('active'));
@@ -381,4 +413,7 @@ window.closeModal = () => {
     currentArticulo = null;
 };
 
+// Inicialización
+detectarBarcodeScanner();
+setupBarcodeListener();
 skuInput.focus();
