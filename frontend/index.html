@@ -26,7 +26,10 @@
         <!-- Visor de cámara para escanear -->
         <div id="cameraContainer" class="camera-container" style="display:none;">
             <div class="camera-card">
-                <div id="reader" style="width: 100%;"></div>
+                <div id="scanner-container" style="width: 100%; position: relative;">
+                    <video id="scanner-video" autoplay playsinline style="width: 100%; border-radius: 16px;"></video>
+                    <canvas id="scanner-canvas" style="display: none;"></canvas>
+                </div>
                 <div class="camera-controls">
                     <button id="closeCameraBtn">❌ Cancelar</button>
                 </div>
@@ -65,7 +68,9 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- Librería de escaneo robusta -->
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
+    <script src="https://unpkg.com/@ericblade/quagga2@1.8.2/dist/quagga.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
