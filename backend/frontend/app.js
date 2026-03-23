@@ -2,9 +2,7 @@ const API_URL = window.location.origin + '/api';
 let currentSku = null;
 let currentArticulo = null;
 let selectedPack = null;
-let scannerActive = false;
-let lastCode = '';
-let lastCodeTime = 0;
+let scanner = null;
 
 // Elementos DOM
 const skuInput = document.getElementById('skuInput');
@@ -12,6 +10,7 @@ const scanBtn = document.getElementById('scanBtn');
 const scanCameraBtn = document.getElementById('scanCameraBtn');
 const cameraContainer = document.getElementById('cameraContainer');
 const closeCameraBtn = document.getElementById('closeCameraBtn');
+const video = document.getElementById('scanner-video');
 const formContainer = document.getElementById('formContainer');
 const displaySku = document.getElementById('displaySku');
 const displayArticulo = document.getElementById('displayArticulo');
@@ -61,6 +60,7 @@ scanBtn.onclick = async () => {
     await verificarSku(sku);
 };
 
+// Abrir cámara con Instascan
 scanCameraBtn.onclick = async () => {
     await iniciarCamara();
 };
@@ -69,106 +69,57 @@ closeCameraBtn.onclick = () => {
     detenerCamara();
 };
 
-// Iniciar cámara con Quagga2 optimizado
+// Iniciar cámara con Instascan
 async function iniciarCamara() {
     try {
         cameraContainer.style.display = 'block';
-        scannerActive = true;
         
-        // Configuración optimizada para códigos de barras
-        Quagga.init({
-            inputStream: {
-                name: "Live",
-                type: "LiveStream",
-                target: document.querySelector('#interactive'),
-                constraints: {
-                    facingMode: "environment",
-                    width: { min: 640, ideal: 1280, max: 1920 },
-                    height: { min: 480, ideal: 720, max: 1080 },
-                    aspectRatio: { ideal: 1.7777777778 }
-                },
-            },
-            locator: {
-                patchSize: "x-large",
-                halfSample: true,
-                debug: {
-                    drawBoundingBox: false,
-                    showFrequency: false,
-                    drawScanline: false,
-                    showPattern: false
-                }
-            },
-            numOfWorkers: navigator.hardwareConcurrency || 4,
-            decoder: {
-                readers: [
-                    "code_128_reader",
-                    "ean_reader",
-                    "ean_8_reader",
-                    "code_39_reader",
-                    "code_93_reader",
-                    "codabar_reader",
-                    "upc_reader",
-                    "upc_e_reader",
-                    "i2of5_reader"
-                ],
-                debug: {
-                    drawBoundingBox: false,
-                    showFrequency: false,
-                    drawScanline: false,
-                    showPattern: false
-                }
-            },
-            locate: true,
-            frequency: 15
-        }, function(err) {
-            if (err) {
-                console.error("Error:", err);
-                showStatus('Error al iniciar escáner', 'error');
-                detenerCamara();
-                return;
-            }
-            
-            Quagga.start();
-            
-            let detections = [];
-            
-            Quagga.onDetected(function(result) {
-                if (!scannerActive) return;
-                
-                const code = result.codeResult.code;
-                const confidence = result.codeResult.confidence || 0;
-                const now = Date.now();
-                
-                if (code && code.length > 0 && confidence > 0.65) {
-                    detections.push({ code, time: now, confidence });
-                    detections = detections.filter(d => now - d.time < 800);
-                    
-                    const sameCodeDetections = detections.filter(d => d.code === code);
-                    
-                    if (sameCodeDetections.length >= 2 && code !== lastCode) {
-                        if (validarCodigoBarras(code)) {
-                            lastCode = code;
-                            lastCodeTime = now;
-                            scannerActive = false;
-                            playBeep();
-                            vibrate();
-                            detenerCamara();
-                            skuInput.value = code;
-                            verificarSku(code);
-                        } else {
-                            showStatus('⚠️ Código no válido', 'error');
-                            setTimeout(() => {
-                                if (statusDiv.innerHTML === '⚠️ Código no válido') {
-                                    statusDiv.innerHTML = '';
-                                }
-                            }, 1000);
-                        }
-                    }
-                }
-            });
-            
-            showStatus('📷 Cámara activa. Enfoca el código de barras.', '');
+        scanner = new Instascan.Scanner({ 
+            video: video,
+            mirror: false,
+            backgroundScan: false,
+            continuous: true
         });
+        
+        scanner.addListener('scan', function(content) {
+            const code = content.trim();
+            if (validarCodigoBarras(code)) {
+                playBeep();
+                vibrate();
+                detenerCamara();
+                skuInput.value = code;
+                verificarSku(code);
+            } else {
+                showStatus('⚠️ Código no válido', 'error');
+                setTimeout(() => {
+                    if (statusDiv.innerHTML === '⚠️ Código no válido') {
+                        statusDiv.innerHTML = '';
+                    }
+                }, 1500);
+            }
+        });
+        
+        const cameras = await Instascan.Camera.getCameras();
+        
+        if (cameras.length === 0) {
+            showStatus('No se encontró cámara', 'error');
+            detenerCamara();
+            return;
+        }
+        
+        // Buscar cámara trasera
+        let backCamera = cameras.find(camera => 
+            camera.name.toLowerCase().includes('back') ||
+            camera.name.toLowerCase().includes('environment') ||
+            camera.name.toLowerCase().includes('rear')
+        );
+        
+        if (!backCamera) {
+            backCamera = cameras[0];
+        }
+        
+        await scanner.start(backCamera);
+        showStatus('📷 Cámara activa. Apunta al código de barras.', '');
         
     } catch (error) {
         console.error('Error:', error);
@@ -178,12 +129,11 @@ async function iniciarCamara() {
 }
 
 function detenerCamara() {
-    scannerActive = false;
-    lastCode = '';
-    if (Quagga) {
+    if (scanner) {
         try {
-            Quagga.stop();
+            scanner.stop();
         } catch(e) {}
+        scanner = null;
     }
     cameraContainer.style.display = 'none';
 }
